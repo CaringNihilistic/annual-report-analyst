@@ -205,32 +205,32 @@ python -m evals.judge_validation build|score     # judge vs human grades
 python -m evals.gate                             # (M6) 15-question subset, exits non-zero on regression
 ```
 
-Note: Groq's free tier allows 200,000 tokens a day for `gpt-oss-20b`. A full uncached run of all modes exceeds that, so the LLM client waits and retries when rate-limited, and responses are cached.
+Note: Groq's free tier allows 200,000 tokens a day for `gpt-oss-20b`. A full uncached run of all modes exceeds that. The LLM client waits and retries short rate limits, and responses are cached. If `ANTHROPIC_API_KEY` is set and Groq asks for a wait of more than a minute, the generator falls back to `claude-haiku-5-5`, the cheapest current Claude model. Each report states how many answers each model produced. The judge never falls back.
 
 ### Results
 
-**M5: full golden set (50 questions).** Model `openai/gpt-oss-20b` on Groq, top 5 chunks, faithfulness judged by `openai/gpt-oss-120b`. Reports: `evals/reports/agent-blind.md` and `evals/reports/rerank.md`.
+**M5: full golden set (50 questions).** Model `openai/gpt-oss-20b` on Groq, top 5 chunks, faithfulness judged by `openai/gpt-oss-120b`. Reports: `evals/reports/agent-blind.md`, `agent.md` (post-fix) and `rerank.md`.
 
-| Metric | Plain RAG (hybrid + rerank) | **Agent, blind run (headline)** |
-|---|---|---|
-| Numeric exact match (within 0.5%) | 80% (12/15) | **80% (12/15)** |
-| Year-over-year correct | 0% (0/10) | **40% (4/10)** |
-| Comparison correct | 0% (0/10) | **80% (8/10)** |
-| Citation accuracy (each cited number on its cited page) | 67% (16/24) | **88% (28/32)** |
-| Evidence hit rate (number + narrative) | 76% (19/25) | **84% (21/25)** |
-| Narrative answered | 100% (10/10) | 100% (10/10) |
-| Faithfulness (narrative, LLM judge: supported / total claims) | 93% | 91% |
-| Narrative answers with every claim supported | 90% (9/10) | 80% (8/10) |
-| Narrative keyword coverage (rough proxy) | 51% | 41% |
-| Refusal rate (should-refuse questions) | 100% (5/5) | 100% (5/5) |
-| p50 / p95 latency | 4.3 s / 16.2 s | 0.01 s / 16.2 s |
-| Cost per query (estimate from Groq list prices) | ~$0.00015 | ~$0.00006 |
+| Metric | Plain RAG (hybrid + rerank) | **Agent, blind run (headline)** | Agent after fixes (optimistic) |
+|---|---|---|---|
+| Numeric exact match (within 0.5%) | 80% (12/15) | **80% (12/15)** | 87% (13/15) |
+| Year-over-year correct | 0% (0/10) | **40% (4/10)** | 50% (5/10) |
+| Comparison correct | 0% (0/10) | **80% (8/10)** | 90% (9/10) |
+| Citation accuracy (each cited number on its cited page) | 67% (16/24) | **88% (28/32)** | 94% (29/31) |
+| Evidence hit rate (number + narrative) | 76% (19/25) | **84% (21/25)** | 76% (19/25) |
+| Narrative answered | 100% (10/10) | 100% (10/10) | 80% (8/10) |
+| Faithfulness (narrative, LLM judge: supported / total claims) | 93% | 91% | 92% (over 8) |
+| Narrative answers with every claim supported | 90% (9/10) | 80% (8/10) | 88% (7/8) |
+| Narrative keyword coverage (rough proxy) | 51% | 41% | 41% |
+| Refusal rate (should-refuse questions) | 100% (5/5) | 100% (5/5) | 100% (5/5) |
+| p50 / p95 latency | 4.3 s / 16.2 s | 0.01 s / 16.2 s | 0.05 s / 16.2 s |
+| Cost per query (estimate from list prices) | ~$0.00015 | ~$0.00006 | ~$0.00008 |
 
-**Why "blind".** This is the first run of the M4 agent on the 50 questions, with no changes made after seeing them, so it is the honest number. It exposed router bugs: "profit before tax" and "cost of revenues" were routed to the `net_profit` / `revenue` metrics (wrong figure, e.g. y02, y05, n10), "operating margins" (plural) was missed, a "what does X cover?" question got just a number, and text-only year-over-year questions retrieved only one year. These are fixed in `app/agent/router.py`, `tools.py` and `graph.py`, with tests. A re-run with the fixes is **pending** because it is blocked by Groq's free-tier daily token limit. When it finishes, its scores will be added here and labelled *optimistic*, because the fixes were made after seeing the set.
+**Why "blind".** This is the first run of the M4 agent on the 50 questions, with no changes made after seeing them, so it is the honest number. It exposed router bugs: "profit before tax" and "cost of revenues" were routed to the `net_profit` / `revenue` metrics (wrong figure, e.g. y02, y05, n10), "operating margins" (plural) was missed, a "what does X cover?" question got just a number, and text-only year-over-year questions retrieved only one year. These are fixed in `app/agent/router.py`, `tools.py` and `graph.py`, with tests. The last column is the re-run with those fixes. It is labelled *optimistic* because the fixes were made after seeing the set. Of its 18 LLM answers, 16 came from `gpt-oss-20b` and 2 from the `claude-haiku-5-5` fallback (Groq's daily limit). The fixes gained one number (n10), one year-over-year question (y01) and one comparison (c09). They also cost something: two narrative questions that ask about a change (w03, w05) now go through per-year search and come back "Not found" (they were answered before). Two year-over-year answers (y04, y05) give both years' correct figures but don't state the change, so they are scored wrong.
 
-Still missed, and not fixed: TCS other income (n09) and Wipro employee benefit expense (n11), where retrieval misses the right note; Infosys EPS change (y06); one comparison not found (c10). The vector-only and hybrid (no rerank) modes were not re-run on the 50 questions, to save the daily token budget. Their 19-question results are below.
+Still missed, and not fixed: TCS other income (n09) and Wipro employee benefit expense (n11), where retrieval misses the right note; Wipro PBT and TCS EPS changes (y02, y03, "Not found"); Infosys EPS change (y06); one comparison not found (c10); the w03/w05 regression above. The vector-only and hybrid (no rerank) modes were not re-run on the 50 questions, to save the daily token budget. Their 19-question results are below.
 
-**Judge validation: pending.** `docs/judge-validation.md` holds 14 narrative answers (10 agent, 4 plain RAG where its answer differs), with the judge's verdicts hidden, for a human to grade. Agreement and Cohen's kappa will be recorded here once graded. Until then, treat the faithfulness numbers as unvalidated.
+**Judge validation: pending.** `docs/judge-validation.md` holds 15 narrative answers (10 blind agent, 4 plain RAG and 1 post-fix agent answer that differ), with the judge's verdicts hidden, for a human to grade. Agreement and Cohen's kappa will be recorded here once graded. Until then, treat the faithfulness numbers as unvalidated.
 
 **M2–M4: seed set (19 questions).** 8 number, 4 comparison / year-over-year, 4 narrative, 3 refusal. Full output per mode: `evals/reports/<mode>.md` (`python -m evals.run_evals --retrieval vector|hybrid|rerank` or `--agent`).
 
@@ -287,7 +287,7 @@ A merge to `main` that passes all checks builds the image, pushes it to ECR and 
 - [x] **M4: Agent.** LangGraph router with `search_text`, `query_metrics` and `compare` tools; refusal when not found.
   - Done 2026-11-11: rule-based router (deterministic and testable; refuses investment advice and uncovered companies), metric answers phrased from `financial_metrics` with no LLM, year-over-year changes and rankings computed in Python (₹ million converted to crore for ranking), per-company search for text comparisons, and citations renumbered when parts combine. Seed set: numbers 8/8, comparisons 4/4.
 - [x] **M5: Evals.** 50-question golden set, judge validation, `report.md`.
-  - Done 2026-11-11: 50 questions with expected answers read off page images (18 ask for figures outside `financial_metrics`), year-over-year and comparison scoring, a faithfulness judge (`gpt-oss-120b`), and a blind agent run: numbers 12/15, year-over-year 4/10, comparisons 8/10, citations 28/32, faithfulness 91%. Router fixes from the blind run are in; the post-fix re-run and the human grading of the judge (`docs/judge-validation.md`) are still pending. See [Results](#results).
+  - Done 2026-11-11: 50 questions with expected answers read off page images (18 ask for figures outside `financial_metrics`), year-over-year and comparison scoring, a faithfulness judge (`gpt-oss-120b`), and a blind agent run: numbers 12/15, year-over-year 4/10, comparisons 8/10, citations 28/32, faithfulness 91%. After router fixes (optimistic, dev-set): numbers 13/15, year-over-year 5/10, comparisons 9/10. Human grading of the judge (`docs/judge-validation.md`) is pending. See [Results](#results).
 - [ ] **M6: Ship.** Docker, CI with eval gate, AWS deployment with billing alarm, Langfuse tracing, public demo link.
 - [ ] **M7: Write-up.** `docs/design.md` (trade-offs, cost, failure modes, how it would scale) and a results table in this README.
 

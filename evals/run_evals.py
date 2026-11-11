@@ -42,7 +42,11 @@ from ingest.index import load_embedder
 GOLDEN = ROOT / "evals" / "golden.jsonl"
 REPORTS = ROOT / "evals" / "reports"
 # USD per 1M tokens (input, output). Groq list prices as last known; check console.groq.com.
-PRICES = {"openai/gpt-oss-20b": (0.075, 0.30), "llama-3.1-8b-instant": (0.05, 0.08)}
+PRICES = {
+    "openai/gpt-oss-20b": (0.075, 0.30),
+    "llama-3.1-8b-instant": (0.05, 0.08),
+    "claude-haiku-5-5": (0.10, 0.50),  # Anthropic list price (fallback model)
+}
 
 
 @lru_cache
@@ -156,6 +160,7 @@ def main() -> None:
     ]
     embed, llm = load_embedder(s.embedding_model), LLM()
     rows, latencies, in_tok, out_tok, fresh = [], [], 0, 0, 0
+    by_model: dict[str, list[int]] = {}  # model -> [answers, input tokens, output tokens]
     with Session(get_engine()) as session:
         retrieve = make_retriever(args.retrieval, session, embed)
         agent = build_agent(session, retrieve, llm, s.retrieval_k) if args.agent else None
@@ -170,6 +175,8 @@ def main() -> None:
             if c:
                 in_tok, out_tok = in_tok + c.input_tokens, out_tok + c.output_tokens
                 fresh += not c.cached
+                m = by_model.setdefault(c.model, [0, 0, 0])
+                m[0], m[1], m[2] = m[0] + 1, m[1] + c.input_tokens, m[2] + c.output_tokens
             # Latency of a fresh run: wall time, plus the original LLM latency when the
             # call came from the cache (wall time then covers retrieval only). Answers from
             # the metrics table make no LLM call. With several LLM calls per answer
@@ -182,13 +189,13 @@ def main() -> None:
     num, nar, ref = by("number"), by("narrative"), by("refusal")
     yoy, cmp_ = by("yoy"), by("comparison")
     faith = [r["faithfulness"] for r in nar if r.get("faithfulness") is not None]
-    price = PRICES.get(llm.model)
     n = len(rows)
-    cost = (
-        f"${(in_tok * price[0] + out_tok * price[1]) / 1e6 / n:.5f}"
-        if price
-        else "unknown model price"
-    )
+    if all(m in PRICES for m in by_model):
+        usd = sum((i * PRICES[m][0] + o * PRICES[m][1]) / 1e6 for m, (_, i, o) in by_model.items())
+        cost = f"${usd / n:.5f}"
+    else:
+        cost = "unknown model price"
+    answered_by = ", ".join(f"`{m}` {k}" for m, (k, _, _) in by_model.items())
     summary = [
         ("Numeric exact match (within 0.5%)", pct([r["correct"] for r in num])),
         ("Year-over-year correct", pct([r["correct"] for r in yoy])),
@@ -229,13 +236,16 @@ def main() -> None:
         f"Model `{llm.model}`, k={s.retrieval_k}, embeddings `{s.embedding_model}`, "
         f"{n} questions ({len(num)} number, {len(yoy)} yoy, {len(cmp_)} comparison, "
         f"{len(nar)} narrative, {len(ref)} refusal), "
-        f"{fresh} fresh LLM calls.",
+        f"{fresh} fresh LLM calls. LLM answers by model: {answered_by or 'none'}.",
         "",
         "| Metric | Value |",
         "|---|---|",
         *[f"| {k} | {v} |" for k, v in summary],
         "",
-        "Cost uses Groq list prices in `PRICES` (an assumption; check the Groq console).",
+        "Cost uses list prices in `PRICES` (an assumption; check the provider consoles). "
+        f"`{llm.fallback_model}` answers only when Groq's free-tier limit is hit."
+        if llm.fallback_model and len(by_model) > 1
+        else "Cost uses list prices in `PRICES` (an assumption; check the provider consoles).",
         "",
         "## Per question",
         "",

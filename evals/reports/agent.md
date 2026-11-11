@@ -1,22 +1,24 @@
 # Eval report: agent (router + tools, rerank retrieval)
 
-Model `openai/gpt-oss-20b`, k=5, embeddings `sentence-transformers/all-MiniLM-L6-v2`, 19 questions (8 number, 4 comparison, 4 narrative, 3 refusal), 0 fresh LLM calls.
+Model `openai/gpt-oss-20b`, k=5, embeddings `sentence-transformers/all-MiniLM-L6-v2`, 50 questions (15 number, 10 yoy, 10 comparison, 10 narrative, 5 refusal), 3 fresh LLM calls. LLM answers by model: `openai/gpt-oss-20b` 16, `claude-haiku-5-5` 2.
 
 | Metric | Value |
 |---|---|
-| Numeric exact match (within 0.5%) | 100% (8/8) |
-| Comparison / year-over-year correct | 100% (4/4) |
-| Citation accuracy (number + comparison) | 100% (12/12) |
-| Retrieval hit rate, top-k (number + narrative) | 92% (11/12) |
-| Narrative answered (not refused) | 100% (4/4) |
-| Narrative keyword coverage (proxy, not faithfulness) | 57% |
-| Faithfulness (narrative) | not measured yet (M5: RAGAS + judge) |
-| Refusal rate (should-refuse questions) | 100% (3/3) |
-| p50 / p95 latency | 0.01s / 7.12s |
-| Cost per query (est.) | $0.00003 |
-| Tokens (in / out, all questions) | 6469 / 455 |
+| Numeric exact match (within 0.5%) | 87% (13/15) |
+| Year-over-year correct | 50% (5/10) |
+| Comparison correct | 90% (9/10) |
+| Citation accuracy (number + yoy + comparison) | 94% (29/31) |
+| Retrieval hit rate, top-k (number + narrative) | 76% (19/25) |
+| Narrative answered (not refused) | 80% (8/10) |
+| Narrative keyword coverage (proxy, not faithfulness) | 41% |
+| Faithfulness (narrative, LLM judge: supported claims / claims) | 92% over 8 answers |
+| Narrative answers with every claim supported | 88% (7/8) |
+| Refusal rate (should-refuse questions) | 100% (5/5) |
+| p50 / p95 latency | 0.05s / 16.15s |
+| Cost per query (est.) | $0.00008 |
+| Tokens (in / out, all questions) | 34475 / 3126 |
 
-Cost uses Groq list prices in `PRICES` (an assumption; check the Groq console).
+Cost uses list prices in `PRICES` (an assumption; check the provider consoles). `claude-haiku-5-5` answers only when Groq's free-tier limit is hit.
 
 ## Per question
 
@@ -32,7 +34,7 @@ Cost uses Groq list prices in `PRICES` (an assumption; check the Groq console).
 | n08 | number | correct, citation ok, retrieval hit | HCLTech's consolidated profit for the year in FY2026 was ₹16,652 crore [1]. | [1] HCLTech FY2026, p.129 |  |
 | w01 | narrative | answered, retrieval hit, keywords 80% | TCS's operating margin in FY2026 was 25% [1]. TCS’s operating margin expanded in FY 2026 because the company improved its business mix, productivity and realisation, rebalanced its pyramid, and benefited from favourable currency movements, all of which supported margin growth while investments in talent and capability building were offset by these gains[2][5]. | [1] TCS FY2026, p.71; [2] TCS FY2026, p.25; [5] TCS FY2026, p.59 | tcs FY2026 p.25; tcs FY2026 p.59; tcs FY2026 p.25; tcs FY2026 p.59; tcs FY2026 p.28 |
 | w02 | narrative | answered, retrieval hit, keywords 0% | Wipro's consolidated revenue from operations went from ₹890,884 million (≈ ₹89,088 crore) in FY2025 [1] to ₹926,240 million (≈ ₹92,624 crore) in FY2026 [2], a change of +4.0%. The growth was also impacted by a reduction in discretionary spending by clients due to macroeconomic challenges and geopolitical dynamics. [6] | [1] Wipro FY2025, p.272; [2] Wipro FY2026, p.297; [6] Wipro FY2026, p.38 | wipro FY2026 p.23; wipro FY2026 p.111; wipro FY2026 p.35; wipro FY2026 p.38; wipro FY2026 p.271 |
-| w03 | narrative | answered, retrieval hit, keywords 100% | Wipro’s general and administrative expenses rose in FY2026 mainly because of the implementation of a new labor code in India (₹2,599 million included in employee compensation), an increase in lifetime expected credit loss provisions, and a one‑time insurance claim of ₹1,805 million received in FY2025 [1]. | [1] Wipro FY2026, p.38 | wipro FY2026 p.38; wipro FY2026 p.39; wipro FY2026 p.44; wipro FY2026 p.40; wipro FY2026 p.184 |
+| w03 | narrative | refused, retrieval miss, keywords 0% | Not found in the reports. |  |  |
 | w04 | narrative | answered, retrieval miss, keywords 50% | Its consolidated impact was ₹1,289 crore[3][4] | [3] Infosys FY2026, p.80; [4] Infosys FY2026, p.337 | infosys FY2026 p.288; infosys FY2026 p.78; infosys FY2026 p.80; infosys FY2026 p.337; infosys FY2026 p.288 |
 | r01 | refusal | refused (correct) | This assistant only answers from the companies' annual reports and does not give investment advice or share price views. |  |  |
 | r02 | refusal | refused (correct) | Not found in the reports. This assistant covers Infosys, TCS, Wipro, HCLTech and Tech Mahindra (FY2025 and FY2026 annual reports). |  |  |
@@ -41,3 +43,34 @@ Cost uses Groq list prices in `PRICES` (an assumption; check the Groq console).
 | c02 | comparison | correct, citation ok | Infosys's consolidated revenue from operations went from ₹1,62,990 crore in FY2025 [1] to ₹1,78,650 crore in FY2026 [2], a change of +9.6%. | [1] Infosys FY2025, p.30; [2] Infosys FY2026, p.34 |  |
 | c03 | comparison | correct, citation ok | TCS's operating margin in FY2026 was 25% [1]. Infosys's operating margin in FY2026 was 20.3% [2]. HCLTech's operating margin in FY2026 was 17.2% [3]. Wipro's operating margin in FY2026 was 16.3% [4]. In FY2026, highest: TCS (25%); lowest: Wipro (16.3%). No operating margin figure is stated in a table for: Tech Mahindra. | [1] TCS FY2026, p.71; [2] Infosys FY2026, p.82; [3] HCLTech FY2026, p.123; [4] Wipro FY2026, p.38 |  |
 | c04 | comparison | correct, citation ok | HCLTech's consolidated profit for the year went from ₹17,399 crore in FY2025 [1] to ₹16,652 crore in FY2026 [2], a change of -4.3%. | [1] HCLTech FY2025, p.106; [2] HCLTech FY2026, p.129 |  |
+| n09 | number | wrong, citation bad, retrieval miss | TCS’s consolidated other income for FY 2025 was ₹3,339 crore, comprising ₹3,296 crore from interest income (₹888 crore on bank balances, ₹224 crore on amortised‑cost financial assets, ₹2,114 crore on fair‑value‑through‑OCI financial assets, and ₹70 crore on other interest) and ₹43 crore from dividend income[1]. | [1] TCS FY2025, p.217 | tcs FY2025 p.217; tcs FY2025 p.148; tcs FY2025 p.148; tcs FY2025 p.232; tcs FY2025 p.234 |
+| n10 | number | correct, citation ok, retrieval hit | Infosys’s consolidated profit before tax for the year ended March 31, 2025 was ₹37,608 crore. [3] | [3] Infosys FY2025, p.30 | infosys FY2025 p.317; infosys FY2025 p.238; infosys FY2025 p.30; infosys FY2025 p.277; infosys FY2025 p.30 |
+| n11 | number | wrong, retrieval miss | Not found in the reports. |  |  |
+| n12 | number | correct, citation ok, retrieval hit | Exceptional items reported on a consolidated basis in FY2026 were ₹956 crore. [2] | [2] HCLTech FY2026, p.129 | hcltech FY2026 p.212; hcltech FY2026 p.129; hcltech FY2026 p.7; hcltech FY2026 p.4; hcltech FY2026 p.128 |
+| n13 | number | correct, citation ok, retrieval hit | TCS’s dividend for FY 2026 was ₹110 per equity share, comprising three interim dividends of ₹11 each, a special dividend of ₹46, and a final dividend of ₹31 [1][5] | [1] TCS FY2026, p.25; [5] TCS FY2026, p.37 | tcs FY2026 p.25; tcs FY2026 p.9; tcs FY2026 p.326; tcs FY2026 p.37; tcs FY2026 p.37 |
+| n14 | number | correct, citation ok, retrieval hit | Infosys’s consolidated basic earnings per share for fiscal 2026 was ₹71.58 per share. [5] | [5] Infosys FY2026, p.34 | infosys FY2026 p.27; infosys FY2026 p.288; infosys FY2026 p.288; infosys FY2026 p.301; infosys FY2026 p.34 |
+| n15 | number | correct, citation ok, retrieval hit | TCS had a total of 6,36,833 employees, including those other than permanent, at the end of FY 2025. [4] | [4] TCS FY2025, p.148 | tcs FY2025 p.140; tcs FY2025 p.84; tcs FY2025 p.84; tcs FY2025 p.148; tcs FY2025 p.131 |
+| y01 | yoy | correct, citation bad | Infosys’s consolidated other income was ₹4,322 crore in FY2026 and ₹3,600 crore in FY2025 [5]. This represents a 20.1 % increase year‑on‑year [5]. | [5] Infosys FY2026, p.288 | infosys FY2025 p.279; infosys FY2025 p.278; infosys FY2025 p.339; infosys FY2026 p.288; infosys FY2026 p.288; infosys FY2026 p.78 |
+| y02 | yoy | wrong | Not found in the reports. |  |  |
+| y03 | yoy | wrong | Not found in the reports. |  |  |
+| y04 | yoy | wrong, citation ok | TCS declared a total dividend of ₹126 per share for FY 2025 [1][2] and a total dividend of ₹110 per share for FY 2026 [4]. | [1] TCS FY2025, p.23; [2] TCS FY2025, p.69; [4] TCS FY2026, p.25 | tcs FY2025 p.23; tcs FY2025 p.69; tcs FY2025 p.315; tcs FY2026 p.25; tcs FY2026 p.326; tcs FY2026 p.37 |
+| y05 | yoy | wrong, citation ok | HCLTech’s consolidated profit before tax was ₹23,261 crores in FY2025 [5] and ₹22,102 crores in FY2026 [5]. | [5] HCLTech FY2026, p.129 | hcltech FY2025 p.409; hcltech FY2025 p.408; hcltech FY2025 p.413; hcltech FY2026 p.83; hcltech FY2026 p.129; hcltech FY2026 p.367 |
+| y06 | yoy | wrong, citation ok | The only EPS figure is a reported EPS growth of 11.0% in fiscal 2026, though that excerpt does not say whether it is consolidated [4]. Separately, the Labour Codes reduced consolidated Basic EPS by ₹2.36 in fiscal 2026, while income tax order benefits added ₹2.81 [5]. | [4] Infosys FY2026, p.82; [5] Infosys FY2026, p.82 | infosys FY2025 p.73; infosys FY2025 p.30; infosys FY2025 p.238; infosys FY2026 p.82; infosys FY2026 p.82; infosys FY2026 p.78 |
+| y07 | yoy | correct, citation ok | TCS's number of permanent employees went from 6,07,979 in FY2025 [1] to 5,84,519 in FY2026 [2], a change of -3.9%. | [1] TCS FY2025, p.95; [2] TCS FY2026, p.120 |  |
+| y08 | yoy | correct, citation ok | Wipro's consolidated revenue from operations went from ₹890,884 million (≈ ₹89,088 crore) in FY2025 [1] to ₹926,240 million (≈ ₹92,624 crore) in FY2026 [2], a change of +4.0%. | [1] Wipro FY2025, p.272; [2] Wipro FY2026, p.297 |  |
+| y09 | yoy | correct, citation ok | Tech Mahindra's attrition (turnover rate for permanent employees) went from 11.8% in FY2025 [1] to 12.1% in FY2026 [2], a change of +0.3 percentage points. | [1] Tech Mahindra FY2025, p.89; [2] Tech Mahindra FY2026, p.381 |  |
+| y10 | yoy | correct, citation ok | Infosys's operating margin went from 21.1% in FY2025 [1] to 20.3% in FY2026 [2], a change of -0.8 percentage points. | [1] Infosys FY2025, p.76; [2] Infosys FY2026, p.82 |  |
+| c05 | comparison | correct, citation ok | TCS's consolidated revenue from operations in FY2026 was ₹2,67,021 crore [1]. Infosys's consolidated revenue from operations in FY2026 was ₹1,78,650 crore [2]. HCLTech's consolidated revenue from operations in FY2026 was ₹1,30,144 crore [3]. Wipro's consolidated revenue from operations in FY2026 was ₹926,240 million (≈ ₹92,624 crore) [4]. Tech Mahindra's consolidated revenue from operations in FY2026 was ₹568,154 million (≈ ₹56,815 crore) [5]. In FY2026, highest: TCS (₹2,67,021 crore); lowest: Tech Mahindra (₹568,154 million (≈ ₹56,815 crore)). | [1] TCS FY2026, p.36; [2] Infosys FY2026, p.34; [3] HCLTech FY2026, p.129; [4] Wipro FY2026, p.297; [5] Tech Mahindra FY2026, p.626 |  |
+| c06 | comparison | correct, citation ok | TCS's number of permanent employees in FY2026 was 5,84,519 [1]. Infosys's number of permanent employees in FY2026 was 3,28,594 [2]. Wipro's number of permanent employees in FY2026 was 2,38,061 [3]. HCLTech's number of permanent employees in FY2026 was 2,27,181 [4]. Tech Mahindra's number of permanent employees in FY2026 was 1,40,216 [5]. In FY2026, highest: TCS (5,84,519); lowest: Tech Mahindra (1,40,216). | [1] TCS FY2026, p.120; [2] Infosys FY2026, p.160; [3] Wipro FY2026, p.526; [4] HCLTech FY2026, p.246; [5] Tech Mahindra FY2026, p.405 |  |
+| c07 | comparison | correct, citation ok | TCS's consolidated profit for the year in FY2025 was ₹48,797 crore [1]. Infosys's consolidated profit for the year in FY2025 was ₹26,750 crore [2]. In FY2025, highest: TCS (₹48,797 crore); lowest: Infosys (₹26,750 crore). | [1] TCS FY2025, p.69; [2] Infosys FY2025, p.30 |  |
+| c08 | comparison | correct, citation ok | Wipro's attrition (turnover rate for permanent employees) in FY2026 was 14.09% [1]. TCS's attrition (turnover rate for permanent employees) in FY2026 was 13.7% [2]. Infosys's attrition (turnover rate for permanent employees) in FY2026 was 12.6% [3]. HCLTech's attrition (turnover rate for permanent employees) in FY2026 was 12.51% [4]. Tech Mahindra's attrition (turnover rate for permanent employees) in FY2026 was 12.1% [5]. In FY2026, highest: Wipro (14.09%); lowest: Tech Mahindra (12.1%). | [1] Wipro FY2026, p.504; [2] TCS FY2026, p.109; [3] Infosys FY2026, p.145; [4] HCLTech FY2026, p.217; [5] Tech Mahindra FY2026, p.381 |  |
+| c09 | comparison | correct, citation ok | Infosys's operating margin in FY2025 was 21.1% [1]. HCLTech's operating margin in FY2025 was 18.3% [2]. Wipro's operating margin in FY2025 was 16.98% [3]. In FY2025, highest: Infosys (21.1%); lowest: Wipro (16.98%). | [1] Infosys FY2025, p.76; [2] HCLTech FY2025, p.114; [3] Wipro FY2025, p.26 |  |
+| c10 | comparison | wrong | Not found in the reports. |  |  |
+| w05 | narrative | refused, retrieval miss, keywords 0% | Not found in the reports. |  |  |
+| w06 | narrative | answered, retrieval hit, keywords 0% | Salary increases and promotions partly offset this, and a one-time employee restructuring expense of ₹1,083 million in FY2026 added to the expenses [4]. As a percentage of total revenue, these expenses decreased from 7.23% for FY2025 to 6.38% for FY2026, and in absolute terms they decreased by 8.02% [4]. For the IT Services segment, expenses fell by ₹6,317 million, driven by a ₹5,900 million decrease in employee compensation costs [5]. | [4] Wipro FY2026, p.38; [5] Wipro FY2026, p.39 | wipro FY2025 p.27; wipro FY2025 p.16; wipro FY2025 p.29; wipro FY2026 p.38; wipro FY2026 p.39; wipro FY2026 p.58 |
+| w07 | narrative | answered, retrieval miss, keywords 33% | Infosys received orders under Section 250 of the Income‑Tax Act, 1961, for the assessment years 2016‑17 and 2019‑20, which confirmed the company’s position on certain contentious matters and led to interest income of ₹327 crore and a reversal of a ₹183 crore provision for income tax. [4] | [4] Infosys FY2025, p.238 | infosys FY2025 p.238; infosys FY2025 p.317; infosys FY2025 p.74; infosys FY2025 p.238; infosys FY2025 p.117 |
+| w08 | narrative | answered, retrieval hit, keywords 100% | TCS declared three interim dividends of ₹10 each, a special dividend of ₹66, and a final dividend of ₹30 per equity share for FY 2025, amounting to a total dividend of ₹126 per share. [1][2] | [1] TCS FY2025, p.23; [2] TCS FY2025, p.69 | tcs FY2025 p.23; tcs FY2025 p.69; tcs FY2025 p.315; tcs FY2025 p.47; tcs FY2025 p.137 |
+| w09 | narrative | answered, retrieval hit, keywords 50% | HCLTech describes its AI positioning in the FY2026 Directors’ Report as an ambition to be “among the best AI solutions providers in the world,” noting that the company has built a full‑stack AI solutions portfolio to accelerate AI adoption in enterprises and has become the first large‑cap, India‑headquartered technology services company to report advanced AI revenue of $620 million in FY26. [1] | [1] HCLTech FY2026, p.6 | hcltech FY2026 p.6; hcltech FY2026 p.129; hcltech FY2026 p.67; hcltech FY2026 p.223; hcltech FY2026 p.135 |
+| w10 | narrative | answered, retrieval hit, keywords 100% | Tech Mahindra’s FY2026 “turnover rate for permanent employees” table covers the voluntary attrition rate for IT services employees. [1][2] | [1] Tech Mahindra FY2026, p.381; [2] Tech Mahindra FY2026, p.381 | techmahindra FY2026 p.381; techmahindra FY2026 p.381; techmahindra FY2026 p.303; techmahindra FY2026 p.418; techmahindra FY2026 p.437 |
+| r04 | refusal | refused (correct) | Not found in the reports. This assistant covers Infosys, TCS, Wipro, HCLTech and Tech Mahindra (FY2025 and FY2026 annual reports). |  |  |
+| r05 | refusal | refused (correct) | Not found in the reports. |  |  |

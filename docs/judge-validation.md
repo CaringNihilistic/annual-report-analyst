@@ -1,4 +1,4 @@
-# Judge validation: grade 14 answers
+# Judge validation: grade 15 answers
 
 For each answer, read the sources and decide: **is every factual claim in the answer supported by the sources?** Paraphrase is fine; a claim that is missing from the sources, or has a wrong number, year or direction, is not supported.
 
@@ -227,6 +227,24 @@ Table: 22. Turnover rate for permanent employees *Key Managerial Personnel incl
 <details><summary>Source [2]</summary>
 
 Table: 22. Turnover rate for permanent employees *Key Managerial Personnel includes the Managing Director & CEO (who is also a Board Member), the Chief Financial Officer and the Company Secretary. | FY 2025-26.Male | FY 2025-26.Female | FY 2025-26.Other | FY 2025-26.Total | FY 2024-25.Male | FY 2024-25.Female | FY 2024-25.Other | FY 2024-25.Total | FY 2023-24.Male | FY 2023-24.Female | FY 2023-24.Other | FY 2023-24.Total Permanent | 12.5 | 11.1 | 0 | 12.1 | 12.3 | 10.8 | 0 | 11.8 | 10.1 | 9.6 | 0 | 10 Employees % | | | | | | | | | | | | 22. Turnover rate for permanent employees * Voluntary attrition for IT services
+
+</details>
+
+**Your verdict:** ?
+
+## 15. Why did Wipro's selling and marketing expenses decrease in fiscal year 2026?
+
+**Answer:** Salary increases and promotions partly offset this, and a one-time employee restructuring expense of ₹1,083 million in FY2026 added to the expenses [4]. As a percentage of total revenue, these expenses decreased from 7.23% for FY2025 to 6.38% for FY2026, and in absolute terms they decreased by 8.02% [4]. For the IT Services segment, expenses fell by ₹6,317 million, driven by a ₹5,900 million decrease in employee compensation costs [5].
+
+<details><summary>Source [1]</summary>
+
+Selling and Marketing Expenses: Our selling and marketing expenses as a percentage of total revenue decreased from 7.23% for the year ended March 31, 2025 to 6.38% for the year ended March 31, 2026. In absolute terms, selling and marketing expenses decreased by 8.02% due to decrease in our total employee compensation costs as a result of lower average headcount and a reduction in per-employee cost in fiscal year 2026 as compared to fiscal year 2025 and were partially offset by the impact of salary increases and promotions, and a one-time employee restructuring expense of ₹1,083 million in fiscal year 2026. General and Administrative Expenses: Our general and administrative expenses as a percentage of total revenue increased from 6.45% for the year ended March 31, 2025, to 6.62% for the year ended March 31, 2026. In absolute terms, general and administrative expenses increased by 6.91%. This was primarily on account of the impact of the implementation of a new labor code in India (₹2,599 million included in employee compensation), an increase in lifetime expected credit loss provisions in fiscal year 2026, and receipt of a one-time insurance claim of ₹1,805 million in fiscal year 2025. This increase in expenses was partially offset by a reduction in staff recruitment expenses and a reduction in average headcount during the fiscal year 2026 arising out of cost optimization initiatives.
+
+</details>
+
+<details><summary>Source [2]</summary>
+
+Selling and marketing expenses as a percentage of revenue from our IT Services segment declined from 7.2% for the year ended March 31, 2025, to 6.30% for the year ended March 31, 2026. In absolute terms, these expenses fell by ₹6,317 million. Employee compensation costs decreased by ₹5,900 million due to lower average headcount and a reduction in per-employee cost in fiscal year 2026 as compared to fiscal year 2025 and was partially offset by the impact of salary increases and promotions. General and administrative expenses as a percentage of revenue from our IT Services segment decreased from 6.48% for the year ended March 31, 2025, to 6.35% for the year ended March 31, 2026. In absolute terms, general and administrative expenses increased by ₹969 million. This was primarily due to an increase in lifetime expected credit loss of ₹2,401 million and receipt of a one-time insurance claim of ₹1,805 million in fiscal year 2025. This was partially offset by a reduction in total employee compensation costs of ₹3,101 million arising from cost optimization initiatives in fiscal year 2026 compared to fiscal year 2025. Staff recruitment expenses decreased by ₹1,244 million during the year ended March 31, 2026. As a result of the above, segment results as a percentage of our revenue from our IT Services segment increased by 15 bps, from 17.07% to 17.22%. In absolute terms, the segment results of our IT Services segment increased by 4.62%.
 
 </details>
 

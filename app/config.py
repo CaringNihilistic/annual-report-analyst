@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     # Cheapest general chat model on Groq (Nov 2026); override in .env to compare models.
     groq_model: str = "openai/gpt-oss-20b"
+    # Fallback when Groq's free-tier daily limit is hit: the cheapest current Claude model.
+    anthropic_model: str = "claude-haiku-5-5"
     llm_cache_dir: Path = ROOT / ".cache" / "llm"
     retrieval_k: int = 5
     reranker_model: str = "BAAI/bge-reranker-base"

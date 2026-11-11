@@ -67,3 +67,69 @@ def test_rate_limit_is_retried(tmp_path, monkeypatch):
     monkeypatch.setattr(llm_mod.time, "sleep", slept.append)
     out = LLM(client=client, model="m", cache_dir=tmp_path).complete("s", "u")
     assert out.text and slept == [3.5]
+
+
+class FakeAnthropic:
+    """Stands in for anthropic.Anthropic."""
+
+    def __init__(self):
+        self.calls = []
+        self.messages = SimpleNamespace(create=self._create)
+
+    def _create(self, **kwargs):
+        self.calls.append(kwargs)
+        assert "temperature" not in kwargs  # current Claude models reject it
+        return SimpleNamespace(
+            content=[SimpleNamespace(type="thinking"), SimpleNamespace(type="text", text="ok [1]")],
+            usage=SimpleNamespace(input_tokens=90, output_tokens=10),
+        )
+
+
+def _always_rate_limited(wait="9m30s"):
+    class TPDLimit(Exception):
+        status_code = 429
+
+    def create(**kw):
+        raise TPDLimit(f"Please try again in {wait}")
+
+    return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+
+
+def test_long_rate_limit_falls_back_and_records_model(tmp_path, monkeypatch):
+    import app.llm as llm_mod
+
+    monkeypatch.setattr(llm_mod.time, "sleep", lambda s: (_ for _ in ()).throw(AssertionError))
+    fb = FakeAnthropic()
+    llm = LLM(
+        client=_always_rate_limited(),
+        model="m",
+        cache_dir=tmp_path,
+        fallback_client=fb,
+        fallback_model="claude-test",
+    )
+    out = llm.complete("s", "u")
+    assert out.text == "ok [1]" and out.model == "claude-test" and not out.cached
+    again = llm.complete("s", "u")  # served from the fallback's cache entry
+    assert again.cached and again.model == "claude-test" and len(fb.calls) == 1
+
+
+def test_short_rate_limit_waits_instead_of_falling_back(tmp_path, monkeypatch):
+    import app.llm as llm_mod
+
+    slept = []
+    monkeypatch.setattr(llm_mod.time, "sleep", slept.append)
+    client = FakeClient()
+    real = client._create
+    failures = iter([type("E", (Exception,), {"status_code": 429})("try again in 5s")])
+
+    def flaky(**kw):
+        for e in failures:
+            raise e
+        return real(**kw)
+
+    client.chat.completions.create = flaky
+    fb = FakeAnthropic()
+    out = LLM(
+        client=client, model="m", cache_dir=tmp_path, fallback_client=fb, fallback_model="c"
+    ).complete("s", "u")
+    assert out.model == "m" and slept == [7] and fb.calls == []

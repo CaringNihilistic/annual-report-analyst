@@ -26,10 +26,13 @@ def load(name: str) -> list[dict]:
 
 
 def build() -> None:
-    primary = load("agent-blind")
-    seen = {j["answer"] for j in primary}
-    extra = [j for j in load("rerank") if j["answer"] not in seen]
-    items = [{**j, "system": "agent"} for j in primary] + [{**j, "system": "rerank"} for j in extra]
+    # Blind agent answers first, then distinct answers from plain RAG and the post-fix agent.
+    items, seen = [], set()
+    for name, system in [("agent-blind", "agent"), ("rerank", "rerank"), ("agent", "agent")]:
+        for j in load(name):
+            if j["answer"] not in seen:
+                seen.add(j["answer"])
+                items.append({**j, "system": system})
     items = items[:N]
     ITEMS.write_text("".join(json.dumps(i, ensure_ascii=False) + "\n" for i in items), "utf-8")
 

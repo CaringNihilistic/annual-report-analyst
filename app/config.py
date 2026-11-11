@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     groq_model: str = "openai/gpt-oss-20b"
     llm_cache_dir: Path = ROOT / ".cache" / "llm"
     retrieval_k: int = 5
+    reranker_model: str = "BAAI/bge-reranker-base"
 
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dim: int = 384

@@ -1,8 +1,8 @@
-"""Run the golden questions through the RAG pipeline and write evals/report.md.
+"""Run the golden questions through the RAG pipeline and write evals/reports/<retrieval>.md.
 
 Usage:
-    python -m evals.run_evals                  # all questions
-    python -m evals.run_evals --label baseline # name shown in the report
+    python -m evals.run_evals                      # default retrieval (rerank)
+    python -m evals.run_evals --retrieval vector   # M2 baseline
 
 LLM responses are cached (.cache/llm), so re-running unchanged questions is free.
 Scores (see README "Evaluation"):
@@ -26,6 +26,7 @@ from app.config import ROOT, get_settings
 from app.db.models import get_engine
 from app.llm import LLM
 from app.rag import answer
+from app.retrieval.factory import MODES, make_retriever
 from evals.metrics import (
     citation_supports,
     contains_number,
@@ -36,7 +37,7 @@ from evals.metrics import (
 from ingest.index import load_embedder
 
 GOLDEN = ROOT / "evals" / "golden.jsonl"
-REPORT = ROOT / "evals" / "report.md"
+REPORTS = ROOT / "evals" / "reports"
 # USD per 1M tokens (input, output). Groq list prices as last known; check console.groq.com.
 PRICES = {"openai/gpt-oss-20b": (0.075, 0.30), "llama-3.1-8b-instant": (0.05, 0.08)}
 
@@ -105,7 +106,7 @@ def pct(xs: list) -> str:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("--label", default="baseline (vector only)")
+    ap.add_argument("--retrieval", choices=sorted(MODES), default="rerank")
     args = ap.parse_args()
 
     s = get_settings()
@@ -115,9 +116,10 @@ def main() -> None:
     embed, llm = load_embedder(s.embedding_model), LLM()
     rows, latencies, in_tok, out_tok, fresh = [], [], 0, 0, 0
     with Session(get_engine()) as session:
+        retrieve = make_retriever(args.retrieval, session, embed)
         for q in questions:
             t0 = time.perf_counter()
-            a = answer(q["question"], session=session, embed=embed, llm=llm, k=s.retrieval_k)
+            a = answer(q["question"], retrieve=retrieve, llm=llm, k=s.retrieval_k)
             wall_s = time.perf_counter() - t0
             c = a.completion
             if c:
@@ -160,7 +162,7 @@ def main() -> None:
         ("Tokens (in / out, all questions)", f"{in_tok} / {out_tok}"),
     ]
     lines = [
-        f"# Eval report: {args.label}",
+        f"# Eval report: {args.retrieval} ({MODES[args.retrieval]})",
         "",
         f"Model `{llm.model}`, k={s.retrieval_k}, embeddings `{s.embedding_model}`, "
         f"{n} questions ({len(num)} number, {len(nar)} narrative, {len(ref)} refusal), "
@@ -201,9 +203,11 @@ def main() -> None:
             f"| {r['id']} | {r['type']} | {res} | {ans} | {'; '.join(r['citations'])} | "
             f"{'; '.join(r['retrieved'])} |"
         )
-    REPORT.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    REPORTS.mkdir(exist_ok=True)
+    report = REPORTS / f"{args.retrieval}.md"
+    report.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n" + "\n".join(f"{k}: {v}" for k, v in summary))
-    print(f"\nwrote {REPORT}")
+    print(f"\nwrote {report}")
 
 
 if __name__ == "__main__":

@@ -204,20 +204,25 @@ python -m evals.gate          # 15-question subset, exits non-zero on regression
 
 ### Results
 
-Measured on the 15-question seed set (8 number, 4 narrative, 3 refusal), which grows to 50 in M5. Model `openai/gpt-oss-20b` on Groq, top-5 vector search. Full output: `evals/report.md`.
+Measured on the 15-question seed set (8 number, 4 narrative, 3 refusal), which grows to 50 in M5. Model `openai/gpt-oss-20b` on Groq, top 5 chunks. Full output per mode: `evals/reports/<mode>.md` (`python -m evals.run_evals --retrieval vector|hybrid|rerank`).
 
-| Metric | Baseline (vector only), M2 | Current |
+| Metric | Baseline (vector only), M2 | Current: hybrid + rerank, M3 |
 |---|---|---|
-| Numeric exact match | 25% (2/8) | = baseline |
-| Citation accuracy (numbers stated are on the cited page) | 100% (3/3 answered) | = baseline |
-| Retrieval hit rate (right page in top 5) | 42% (5/12) | = baseline |
-| Narrative answered | 25% (1/4) | = baseline |
-| Faithfulness (narrative) | not measured yet (M5) | – |
-| Refusal rate (should-refuse questions) | 100% (3/3) | = baseline |
-| p95 latency | 4.5 s (p50 0.6 s) | = baseline |
-| Cost per query | ~$0.00007 (estimate from Groq list price) | = baseline |
+| Numeric exact match | 25% (2/8) | **88% (7/8)** |
+| Citation accuracy (numbers stated are on the cited page) | 100% (3/3 answered) | 100% (8/8 answered) |
+| Retrieval hit rate (right page in top 5) | 42% (5/12) | 75% (9/12) |
+| Narrative answered | 25% (1/4) | 100% (4/4) |
+| Narrative keyword coverage (rough proxy) | 20% | 57% |
+| Faithfulness (narrative) | not measured yet (M5) | not measured yet (M5) |
+| Refusal rate (should-refuse questions) | 100% (3/3) | 100% (3/3) |
+| p50 / p95 latency | 0.6 s / 4.5 s | 7.6 s / 15.4 s |
+| Cost per query | ~$0.00007 (estimate from Groq list price) | ~$0.00015 |
 
-What the baseline shows:
+The M2 baseline column is from the first run. After M3 re-indexed tables, vector-only scores 3/8 numbers (tables help even without hybrid search). Hybrid without the reranker scores 4/8 numbers and 9/12 retrieval. The reranker (`BAAI/bge-reranker-base`, local GPU) is what lifts numbers to 7/8 by putting the right table row first. A smaller reranker (`ms-marco-MiniLM-L-6-v2`) was tried and made results *worse* (3/8), so it was dropped.
+
+**Latency is Groq's response time, not retrieval.** Embedding, BM25, vector search and reranking take about 1.5 s together. The rest is the Groq API call (median 5.7 s for a ~70-token answer on this account, up to 22 s), which varies run to run. The remaining number miss is Wipro FY2025: the model quotes the headline "net income ₹131.4 billion" (attributable) instead of consolidated profit ₹132,180 million. M4's `query_metrics` tool answers such questions from `financial_metrics` instead.
+
+What the M2 baseline showed:
 - **Retrieval is the bottleneck.** Financial tables are not in the vector index (they only feed `financial_metrics`), and heading-only chunks rank high. With the right page missing, the model refuses rather than guesses: 7 of 8 wrong number answers are refusals.
 - **The model stays faithful when it answers.** Every number it stated was on the page it cited. The misses are about *which* figure: Wipro's "net income ₹131.4 billion" (attributable) instead of the consolidated profit of ₹132,180 million. HCLTech's ₹16,642 crore (attributable) passes only because it is within the 0.5% tolerance of the statutory ₹16,652 crore.
 - **One narrative passes; refusals are perfect.** One narrative question is answered with its key reasons (TCS's margin, 80% keyword coverage), and all three should-refuse questions are refused.
@@ -244,7 +249,8 @@ A merge to `main` that passes all checks builds the image, pushes it to ECR and 
   - Spot-check: **20/20 correct** ([docs/spot-check-m1.md](docs/spot-check-m1.md)). Done by Claude reading rendered page images, not by a person. All 48 metrics were also confirmed to be printed on their cited page.
 - [x] **M2: Baseline RAG.** Vector search + answer with citations. Record baseline scores.
   - Done 2026-11-11: `app/rag.py` (no citation, no claim), `python -m app.ask`, a 15-question seed set and `python -m evals.run_evals`. Baseline in [Results](#results).
-- [ ] **M3: Hybrid retrieval.** BM25 + vector + reranker. Compare with the baseline.
+- [x] **M3: Hybrid retrieval.** BM25 + vector + reranker. Compare with the baseline.
+  - Done 2026-11-11: tables indexed as text rows (column groups labelled), heading-only chunks dropped, BM25 + vector fused with reciprocal rank fusion, `bge-reranker-base` rerank. Numbers 2/8 → 7/8. Comparison in [Results](#results).
 - [ ] **M4: Agent.** LangGraph router with `search_text`, `query_metrics` and `compare` tools; refusal when not found.
 - [ ] **M5: Evals.** 50-question golden set, judge validation, `report.md`.
 - [ ] **M6: Ship.** Docker, CI with eval gate, AWS deployment with billing alarm, Langfuse tracing, public demo link.

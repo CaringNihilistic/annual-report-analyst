@@ -16,6 +16,9 @@ pydantic-settings>=2.0
 # LLM
 groq>=1.0
 
+# Retrieval (BM25; the cross-encoder comes with sentence-transformers)
+rank_bm25>=0.2
+
 # Dev
 pytest>=8.0
 ruff>=0.6

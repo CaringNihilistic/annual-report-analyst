@@ -6,7 +6,7 @@ name: Image
 on:
   push:
     branches: [master, m6-deploy]  # TODO at merge: drop m6-deploy
-    paths: [Dockerfile, .dockerignore, requirements-app.txt, "app/**", "ingest/**"]
+    paths: [.github/workflows/image.yml, Dockerfile, .dockerignore, requirements-app.txt, "app/**", "ingest/**"]
   workflow_dispatch:
 
 permissions:

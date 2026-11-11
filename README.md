@@ -7,7 +7,9 @@ Ask questions about the annual reports of Indian listed companies and get answer
 
 Most "chat with PDF" demos break on real annual reports: 300-page documents full of tables, footnotes and numbers spread across sections. This project handles them properly, with table-aware parsing, an agent that picks the right retrieval tool for each question, citations to the exact page, and an evaluation suite that measures whether the numbers are right.
 
-**Status:** in development. See [Roadmap](#roadmap).
+[![CI](https://github.com/CaringNihilistic/annual-report-analyst/actions/workflows/ci.yml/badge.svg)](https://github.com/CaringNihilistic/annual-report-analyst/actions/workflows/ci.yml)
+
+**Status:** M1–M6 done: working agent, 50-question eval, Docker image, CI, and an AWS deployment (started on demand, see [deploy/aws.md](deploy/aws.md)). Write-up (M7) next. See [Roadmap](#roadmap).
 
 ---
 
@@ -44,8 +46,7 @@ The app answers only from the reports. It never gives investment advice, and the
                                    ├─► search_text     (hybrid: BM25 + vector, reranked)
                                    ├─► query_metrics   (SQL over extracted tables)
                                    └─► compare         (sub-questions → combine)
-                               ──► answer + citations ──► FastAPI ──► UI
-                                                  └── Langfuse traces
+                               ──► answer + citations ──► FastAPI ──► chat UI (HTML/CSS/JS)
 ```
 
 One PostgreSQL database holds both the vector index (pgvector) and the structured financial table, so there is one service to run and deploy.
@@ -60,11 +61,11 @@ One PostgreSQL database holds both the vector index (pgvector) and the structure
 | Agent | LangGraph | Explicit routing between tools, retries and state |
 | LLM | Groq (default, cheap and fast); Anthropic as fallback | Provider fallback, low cost per query |
 | Embeddings | Local sentence-transformers model | Free, no API key needed |
-| API | FastAPI | Typed endpoints, streaming |
-| UI | Streamlit | Fast to build; the focus is the backend |
-| Evals | pytest + RAGAS + numeric exact-match | Numbers are right or wrong, so they can be scored precisely |
-| Observability | Langfuse | A trace for every LLM and tool call |
-| Infra | Docker, GitHub Actions, AWS (ECR + App Runner or EC2, RDS or Postgres in a container) | Reproducible builds, CI with an eval gate, real deployment |
+| API | FastAPI | Typed endpoints, request validation, OpenAPI docs at `/docs` |
+| UI | Plain HTML, CSS and JavaScript, served by FastAPI | Chat-style interface with clickable citations; no build step, no extra server |
+| Evals | pytest + RAGAS-style faithfulness judge + numeric exact-match | Numbers are right or wrong, so they can be scored precisely |
+| Observability | Logs only (Langfuse planned, not done) | |
+| Infra | Docker, GitHub Actions, ghcr.io, AWS EC2 with Postgres in a container | Reproducible builds, CI, a real deployment that can be stopped to near-zero cost |
 
 ---
 
@@ -73,30 +74,34 @@ One PostgreSQL database holds both the vector index (pgvector) and the structure
 ```
 .
 ├── app/
-│   ├── api/            # FastAPI routes
+│   ├── api.py          # FastAPI: /ask, /health, serves the UI
+│   ├── static/         # chat UI (index.html, style.css, app.js)
 │   ├── agent/          # LangGraph graph, router, tools
-│   ├── retrieval/      # hybrid search, reranker
-│   ├── db/             # SQLAlchemy models, migrations
+│   ├── retrieval/      # vector, hybrid (BM25 + vector + rerank)
+│   ├── db/             # SQLAlchemy models
+│   ├── rag.py          # plain RAG answerer (citations or no claim)
+│   ├── llm.py          # Groq client with Anthropic fallback, cache
+│   ├── ask.py          # command-line entry point
 │   └── config.py       # settings from environment variables
 ├── ingest/
 │   ├── parse.py        # PDF → text chunks + tables (Docling)
 │   ├── tables.py       # table normalisation → financial_metrics rows
 │   └── index.py        # embeddings → pgvector
-├── ui/                 # Streamlit app
 ├── evals/
 │   ├── golden.jsonl    # question, expected answer, source page, type
-│   ├── run_evals.py    # full suite → report
-│   └── gate.py         # fast subset used in CI
+│   ├── run_evals.py    # full suite → evals/reports/
+│   ├── judge.py        # faithfulness judge
+│   └── gate.py         # 15-question regression gate
+├── deploy/             # AWS scripts and aws.md (resources, cost, security)
 ├── tests/              # unit tests (no network, no API keys)
 ├── data/
 │   ├── raw/            # downloaded PDFs (git-ignored)
 │   └── processed/      # parsed output (git-ignored)
-├── docs/
-│   └── design.md       # design doc: trade-offs, costs, failure modes
-├── Dockerfile
-├── docker-compose.yml  # app + postgres for local dev
+├── docs/               # spot-check and judge validation
+├── Dockerfile          # app image, CPU torch, models baked in
+├── docker-compose.yml  # postgres (+ the app with --profile app)
 ├── .env.example
-└── .github/workflows/ci.yml
+└── .github/workflows/  # ci.yml (lint + tests), image.yml (publish to ghcr.io)
 ```
 
 ---
@@ -146,7 +151,7 @@ Every number in `financial_metrics` keeps its `source_page` so answers can cite 
 
 ```bash
 git clone <this repo> && cd annual-report-analyst
-cp .env.example .env          # add your GROQ_API_KEY (and optional ANTHROPIC_API_KEY, LANGFUSE keys)
+cp .env.example .env          # add your GROQ_API_KEY (and optional ANTHROPIC_API_KEY)
 docker compose up -d db       # start Postgres + pgvector
 pip install -r requirements.txt
 python -m ingest.parse        # parse PDFs in data/raw → data/processed/*.json
@@ -154,9 +159,16 @@ python -m ingest.parse --only tcs_FY2025 --force --ocr   # broken text layer: OC
 python -m ingest.tables       # print the extracted metrics + source pages (for spot-checking)
 python -m ingest.index        # build embeddings and the metrics table
 python -m app.ask "Compare attrition at TCS, Wipro and HCLTech in FY2025"   # agent, with citations
-uvicorn app.api.main:app --reload
-streamlit run ui/app.py
+uvicorn app.api:app --port 8000      # web UI at http://127.0.0.1:8000, API docs at /docs
 ```
+
+Or run the app in Docker (the image bundles CPU torch and both models, about 3 GB):
+
+```bash
+docker compose --profile app up -d --build   # Postgres + app on http://127.0.0.1:8000
+```
+
+`POST /ask` takes `{"question": "..."}` and returns the answer, citations (company, fiscal year, page) and whether it refused. `GET /health` checks the database.
 
 ### GPU (optional)
 
@@ -177,7 +189,7 @@ python -c "import torch; print(torch.cuda.is_available())"   # should print True
 | `DATABASE_URL` | yes | Postgres connection string |
 | `GROQ_API_KEY` | yes | Default LLM |
 | `ANTHROPIC_API_KEY` | no | Fallback LLM |
-| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | no | Tracing |
+| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | no | Reserved for tracing (not wired up yet) |
 
 ---
 
@@ -202,8 +214,10 @@ Also measured: retrieval hit rate (is the right page in the top 5?), citation ac
 ```bash
 python -m evals.run_evals --agent                # full suite → evals/reports/agent.md
 python -m evals.judge_validation build|score     # judge vs human grades
-python -m evals.gate                             # (M6) 15-question subset, exits non-zero on regression
+python -m evals.gate                             # 15-question subset, exits non-zero on a regression
 ```
+
+The gate runs 15 questions that pass today (7 numbers, 3 year-over-year, 3 comparisons, 2 refusals) and fails if any answer is wrong or a cited number is not on its cited page. Last run: 15/15 (cached responses).
 
 Note: Groq's free tier allows 200,000 tokens a day for `gpt-oss-20b`. A full uncached run of all modes exceeds that. The LLM client waits and retries short rate limits, and responses are cached. If `ANTHROPIC_API_KEY` is set and Groq asks for a wait of more than a minute, the generator falls back to `claude-haiku-5-5`, the cheapest current Claude model. Each report states how many answers each model produced. The judge never falls back.
 
@@ -264,14 +278,20 @@ What the M2 baseline showed:
 
 ## CI/CD
 
-GitHub Actions runs on every push and pull request:
+GitHub Actions:
 
-1. `ruff` lint and format check
-2. `pytest` (unit tests, no network)
-3. Docker build
-4. Eval gate: the 15-question subset; the build fails if numeric exact match or citation accuracy drops below the saved baseline
+1. **CI** (`ci.yml`, every push to `master` and every pull request): `ruff check`, `ruff format --check`, `pytest` (151 unit tests, no network, no keys).
+2. **Image** (`image.yml`, pushes to `master` that touch the app): builds the Docker image and publishes it to `ghcr.io/caringnihilistic/annual-report-analyst` (`:latest` and the commit SHA), using the built-in `GITHUB_TOKEN`.
 
-A merge to `main` that passes all checks builds the image, pushes it to ECR and deploys to AWS.
+**The eval gate runs locally, not in CI.** It needs the populated database (built from the PDFs, which are not in git), the models and an LLM key. Run `python -m evals.gate` before merging a change to retrieval, the router or prompts. Moving it into CI would mean a database snapshot plus a Groq key as a repository secret.
+
+**Deploys are manual.** The AWS server is stopped most of the time, so there is nothing to deploy to automatically. Pull the new image on the server when demoing ([deploy/aws.md](deploy/aws.md)).
+
+## Deployment
+
+One t3.small EC2 server in Sydney runs the app and Postgres in Docker, paid from the AWS Free plan credits and stopped when not in use (about $0.80 per running day, $1.92/month stopped). There's no SSH (admin access is Session Manager only), keys are in SSM Parameter Store, the IAM role is least-privilege, and a $1 budget alert is set. Details, costs and commands: [deploy/aws.md](deploy/aws.md).
+
+Measured on that server: figures, comparisons and refusals answer in **under 1 s**. Questions about the report text take **30–40 s**, mostly the cross-encoder reranker on 2 slow vCPUs. An 8-bit reranker was tried and rejected because it changed the retrieved passages. The demo link works only while the server is running (`deploy\aws.ps1 start` prints it).
 
 ---
 
@@ -288,7 +308,9 @@ A merge to `main` that passes all checks builds the image, pushes it to ECR and 
   - Done 2026-11-11: rule-based router (deterministic and testable; refuses investment advice and uncovered companies), metric answers phrased from `financial_metrics` with no LLM, year-over-year changes and rankings computed in Python (₹ million converted to crore for ranking), per-company search for text comparisons, and citations renumbered when parts combine. Seed set: numbers 8/8, comparisons 4/4.
 - [x] **M5: Evals.** 50-question golden set, judge validation, `report.md`.
   - Done 2026-11-11: 50 questions with expected answers read off page images (18 ask for figures outside `financial_metrics`), year-over-year and comparison scoring, a faithfulness judge (`gpt-oss-120b`), and a blind agent run: numbers 12/15, year-over-year 4/10, comparisons 8/10, citations 28/32, faithfulness 91%. After router fixes (optimistic, dev-set): numbers 13/15, year-over-year 5/10, comparisons 9/10. Judge vs grader agreement 13/15 (κ 0.42). Graded by Claude, not a human, so a human check is still open. See [Results](#results).
-- [ ] **M6: Ship.** Docker, CI with eval gate, AWS deployment with billing alarm, Langfuse tracing, public demo link.
+- [x] **M6: Ship.** Docker, CI with eval gate, AWS deployment with billing alarm, Langfuse tracing, public demo link.
+  - Done 2026-11-11: FastAPI app with a chat-style HTML/CSS/JS UI; Docker image (CPU torch, models baked in, non-root) published to ghcr.io by GitHub Actions; CI with ruff and 151 tests; `evals.gate` (15/15); EC2 deployment with a $1 budget alert, Parameter Store secrets, Session Manager instead of SSH.
+  - **Not done, by choice:** the eval gate runs locally, not in CI (it needs the database and an API key). **Langfuse tracing** was not added. The **demo link** is live only while the server is started, to stay within the free credits. An always-on free mirror (Hugging Face Spaces) was considered, but it would need Postgres inside the Space and a separate account, so it was left out.
 - [ ] **M7: Write-up.** `docs/design.md` (trade-offs, cost, failure modes, how it would scale) and a results table in this README.
 
 ---

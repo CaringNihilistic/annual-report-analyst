@@ -153,6 +153,7 @@ python -m ingest.parse        # parse PDFs in data/raw → data/processed/*.json
 python -m ingest.parse --only tcs_FY2025 --force --ocr   # broken text layer: OCR instead
 python -m ingest.tables       # print the extracted metrics + source pages (for spot-checking)
 python -m ingest.index        # build embeddings and the metrics table
+python -m app.ask "What was TCS's consolidated revenue in FY2025?"   # one question, with citations
 uvicorn app.api.main:app --reload
 streamlit run ui/app.py
 ```
@@ -203,16 +204,23 @@ python -m evals.gate          # 15-question subset, exits non-zero on regression
 
 ### Results
 
-_To be filled in as milestones land._
+Measured on the 15-question seed set (8 number, 4 narrative, 3 refusal), which grows to 50 in M5. Model `openai/gpt-oss-20b` on Groq, top-5 vector search. Full output: `evals/report.md`.
 
-| Metric | Baseline (vector only) | Current |
+| Metric | Baseline (vector only), M2 | Current |
 |---|---|---|
-| Numeric exact match | – | – |
-| Citation accuracy | – | – |
-| Faithfulness (narrative) | – | – |
-| Refusal rate | – | – |
-| p95 latency | – | – |
-| Cost per query | – | – |
+| Numeric exact match | 25% (2/8) | = baseline |
+| Citation accuracy (numbers stated are on the cited page) | 100% (3/3 answered) | = baseline |
+| Retrieval hit rate (right page in top 5) | 42% (5/12) | = baseline |
+| Narrative answered | 25% (1/4) | = baseline |
+| Faithfulness (narrative) | not measured yet (M5) | – |
+| Refusal rate (should-refuse questions) | 100% (3/3) | = baseline |
+| p95 latency | 4.5 s (p50 0.6 s) | = baseline |
+| Cost per query | ~$0.00007 (estimate from Groq list price) | = baseline |
+
+What the baseline shows:
+- **Retrieval is the bottleneck.** Financial tables are not in the vector index (they only feed `financial_metrics`), and heading-only chunks rank high. With the right page missing, the model refuses rather than guesses: 7 of 8 wrong number answers are refusals.
+- **The model stays faithful when it answers.** Every number it stated was on the page it cited. The misses are about *which* figure: Wipro's "net income ₹131.4 billion" (attributable) instead of the consolidated profit of ₹132,180 million. HCLTech's ₹16,642 crore (attributable) passes only because it is within the 0.5% tolerance of the statutory ₹16,652 crore.
+- **One narrative passes; refusals are perfect.** One narrative question is answered with its key reasons (TCS's margin, 80% keyword coverage), and all three should-refuse questions are refused.
 
 ---
 
@@ -234,7 +242,8 @@ A merge to `main` that passes all checks builds the image, pushes it to ECR and 
 - [x] **M1: Ingestion.** Parse 10 PDFs with page numbers; extract tables; load chunks and `financial_metrics`. Spot-check 20 numbers by hand.
   - Done 2026-11-11: 10 reports parsed (TCS FY2025 with `--ocr`), 18,835 chunks and 48 of 50 metrics loaded. Missing: Tech Mahindra operating margin (FY2025 and FY2026), which no table in those reports states.
   - Spot-check: **20/20 correct** ([docs/spot-check-m1.md](docs/spot-check-m1.md)). Done by Claude reading rendered page images, not by a person. All 48 metrics were also confirmed to be printed on their cited page.
-- [ ] **M2: Baseline RAG.** Vector search + answer with citations. Record baseline scores.
+- [x] **M2: Baseline RAG.** Vector search + answer with citations. Record baseline scores.
+  - Done 2026-11-11: `app/rag.py` (no citation, no claim), `python -m app.ask`, a 15-question seed set and `python -m evals.run_evals`. Baseline in [Results](#results).
 - [ ] **M3: Hybrid retrieval.** BM25 + vector + reranker. Compare with the baseline.
 - [ ] **M4: Agent.** LangGraph router with `search_text`, `query_metrics` and `compare` tools; refusal when not found.
 - [ ] **M5: Evals.** 50-question golden set, judge validation, `report.md`.

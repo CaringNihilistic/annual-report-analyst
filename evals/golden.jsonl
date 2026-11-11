@@ -1,0 +1,15 @@
+{"id": "n01", "type": "number", "question": "What was TCS's consolidated revenue from operations in FY2025?", "company": "tcs", "fiscal_year": 2025, "expected": 255324, "unit": "INR crore", "source_page": 69}
+{"id": "n02", "type": "number", "question": "What was Infosys's consolidated revenue from operations for fiscal 2025?", "company": "infosys", "fiscal_year": 2025, "expected": 162990, "unit": "INR crore", "source_page": 30}
+{"id": "n03", "type": "number", "question": "What was Wipro's consolidated net profit for FY2025?", "company": "wipro", "fiscal_year": 2025, "expected": 132180, "unit": "INR million", "source_page": 100}
+{"id": "n04", "type": "number", "question": "What was HCLTech's operating profit ratio in FY2025?", "company": "hcltech", "fiscal_year": 2025, "expected": 18.3, "unit": "percent", "source_page": 114}
+{"id": "n05", "type": "number", "question": "What was the turnover rate for permanent employees at Infosys in fiscal 2026?", "company": "infosys", "fiscal_year": 2026, "expected": 12.6, "unit": "percent", "source_page": 145}
+{"id": "n06", "type": "number", "question": "How many permanent employees did TCS have at the end of FY2026?", "company": "tcs", "fiscal_year": 2026, "expected": 584519, "unit": "count", "source_page": 120}
+{"id": "n07", "type": "number", "question": "What was Tech Mahindra's consolidated revenue recognised in the statement of profit and loss for FY2026?", "company": "techmahindra", "fiscal_year": 2026, "expected": 568154, "unit": "INR million", "source_page": 626}
+{"id": "n08", "type": "number", "question": "What was HCLTech's consolidated profit for the year in FY2026?", "company": "hcltech", "fiscal_year": 2026, "expected": 16652, "unit": "INR crore", "source_page": 129}
+{"id": "w01", "type": "narrative", "question": "Why did TCS's operating margin expand in FY2026?", "company": "tcs", "fiscal_year": 2026, "source_page": 59, "key_points": ["productivity", "realisation", "pyramid", "currency", "70 basis points"]}
+{"id": "w02", "type": "narrative", "question": "What drove Wipro's revenue growth in fiscal year 2026?", "company": "wipro", "fiscal_year": 2026, "source_page": 38, "key_points": ["depreciation of the Indian Rupee", "acquisitions", "large contracts"]}
+{"id": "w03", "type": "narrative", "question": "Why did Wipro's general and administrative expenses increase in FY2026?", "company": "wipro", "fiscal_year": 2026, "source_page": 38, "key_points": ["labor code", "expected credit loss", "insurance claim"]}
+{"id": "w04", "type": "narrative", "question": "What exceptional item did Infosys report in FY2026, and what was its consolidated impact?", "company": "infosys", "fiscal_year": 2026, "source_page": 34, "key_points": ["Labour Codes", "1,289"]}
+{"id": "r01", "type": "refusal", "question": "Should I buy Wipro shares now?", "company": "wipro", "fiscal_year": null}
+{"id": "r02", "type": "refusal", "question": "What was Accenture's revenue in FY2025?", "company": null, "fiscal_year": 2025}
+{"id": "r03", "type": "refusal", "question": "What will Infosys's share price be at the end of 2027?", "company": "infosys", "fiscal_year": null}

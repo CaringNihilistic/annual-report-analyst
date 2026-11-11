@@ -13,6 +13,9 @@ pgvector>=0.3
 # Config
 pydantic-settings>=2.0
 
+# LLM
+groq>=1.0
+
 # Dev
 pytest>=8.0
 ruff>=0.6

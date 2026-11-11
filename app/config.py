@@ -15,6 +15,10 @@ class Settings(BaseSettings):
 
     groq_api_key: str = ""
     anthropic_api_key: str = ""
+    # Cheapest general chat model on Groq (Nov 2026); override in .env to compare models.
+    groq_model: str = "openai/gpt-oss-20b"
+    llm_cache_dir: Path = ROOT / ".cache" / "llm"
+    retrieval_k: int = 5
 
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dim: int = 384

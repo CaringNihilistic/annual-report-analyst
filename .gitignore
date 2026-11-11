@@ -21,3 +21,6 @@ venv/
 .idea/
 .DS_Store
 Thumbs.db
+
+# LLM response cache (evals)
+.cache/

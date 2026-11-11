@@ -1,19 +1,20 @@
 # Eval report: rerank (BM25 + vector, fused, then cross-encoder rerank (default))
 
-Model `openai/gpt-oss-20b`, k=5, embeddings `sentence-transformers/all-MiniLM-L6-v2`, 15 questions (8 number, 4 narrative, 3 refusal), 5 fresh LLM calls.
+Model `openai/gpt-oss-20b`, k=5, embeddings `sentence-transformers/all-MiniLM-L6-v2`, 19 questions (8 number, 4 comparison, 4 narrative, 3 refusal), 0 fresh LLM calls.
 
 | Metric | Value |
 |---|---|
 | Numeric exact match (within 0.5%) | 88% (7/8) |
-| Citation accuracy (numeric answers) | 100% (8/8) |
+| Comparison / year-over-year correct | 0% (0/4) |
+| Citation accuracy (number + comparison) | 90% (9/10) |
 | Retrieval hit rate, top-k (number + narrative) | 75% (9/12) |
 | Narrative answered (not refused) | 100% (4/4) |
 | Narrative keyword coverage (proxy, not faithfulness) | 57% |
 | Faithfulness (narrative) | not measured yet (M5: RAGAS + judge) |
 | Refusal rate (should-refuse questions) | 100% (3/3) |
-| p50 / p95 latency | 7.63s / 15.42s |
+| p50 / p95 latency | 4.08s / 15.20s |
 | Cost per query (est.) | $0.00015 |
-| Tokens (in / out, all questions) | 25232 / 1127 |
+| Tokens (in / out, all questions) | 31477 / 1405 |
 
 Cost uses Groq list prices in `PRICES` (an assumption; check the Groq console).
 
@@ -36,3 +37,7 @@ Cost uses Groq list prices in `PRICES` (an assumption; check the Groq console).
 | r01 | refusal | refused (correct) | Not found in the reports. |  | wipro FY2026 p.114; wipro FY2025 p.104; wipro FY2026 p.222; wipro FY2025 p.128; wipro FY2025 p.202 |
 | r02 | refusal | refused (correct) | Not found in the reports. |  | tcs FY2025 p.70; tcs FY2025 p.88; techmahindra FY2025 p.411; tcs FY2025 p.76; hcltech FY2025 p.107 |
 | r03 | refusal | refused (correct) | Not found in the reports. |  | infosys FY2026 p.119; infosys FY2025 p.109; infosys FY2025 p.214; infosys FY2026 p.227; infosys FY2026 p.102 |
+| c01 | comparison | wrong | Not found in the reports. |  | tcs FY2025 p.85; tcs FY2025 p.140; hcltech FY2025 p.125; hcltech FY2025 p.11; tcs FY2025 p.140 |
+| c02 | comparison | wrong, citation bad | Infosys’s consolidated revenue rose from ₹1,62,990 crore in FY2025 to ₹1,78,650 crore in FY2026, an increase of ₹15,660 crore. [1] | [1] Infosys FY2026, p.78 | infosys FY2026 p.78; infosys FY2026 p.288; infosys FY2026 p.288; infosys FY2026 p.79; infosys FY2026 p.82 |
+| c03 | comparison | wrong, citation ok | The company with the highest operating margin in FY 2026 was Tata Consultancy Services (TCS) with an operating margin of 25.0%[1][2][3]. | [1] TCS FY2026, p.59; [2] TCS FY2026, p.25; [3] TCS FY2026, p.9 | tcs FY2026 p.59; tcs FY2026 p.25; tcs FY2026 p.9; techmahindra FY2026 p.19; wipro FY2026 p.33 |
+| c04 | comparison | wrong | Not found in the reports. |  | hcltech FY2026 p.6; hcltech FY2026 p.83; hcltech FY2026 p.8; hcltech FY2026 p.182; hcltech FY2026 p.7 |

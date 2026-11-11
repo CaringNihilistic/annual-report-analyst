@@ -153,7 +153,7 @@ python -m ingest.parse        # parse PDFs in data/raw → data/processed/*.json
 python -m ingest.parse --only tcs_FY2025 --force --ocr   # broken text layer: OCR instead
 python -m ingest.tables       # print the extracted metrics + source pages (for spot-checking)
 python -m ingest.index        # build embeddings and the metrics table
-python -m app.ask "What was TCS's consolidated revenue in FY2025?"   # one question, with citations
+python -m app.ask "Compare attrition at TCS, Wipro and HCLTech in FY2025"   # agent, with citations
 uvicorn app.api.main:app --reload
 streamlit run ui/app.py
 ```
@@ -204,19 +204,24 @@ python -m evals.gate          # 15-question subset, exits non-zero on regression
 
 ### Results
 
-Measured on the 15-question seed set (8 number, 4 narrative, 3 refusal), which grows to 50 in M5. Model `openai/gpt-oss-20b` on Groq, top 5 chunks. Full output per mode: `evals/reports/<mode>.md` (`python -m evals.run_evals --retrieval vector|hybrid|rerank`).
+Measured on the seed set: 19 questions (8 number, 4 comparison / year-over-year, 4 narrative, 3 refusal), which grows to 50 in M5. Model `openai/gpt-oss-20b` on Groq, top 5 chunks. Full output per mode: `evals/reports/<mode>.md` (`python -m evals.run_evals --retrieval vector|hybrid|rerank` or `--agent`).
 
-| Metric | Baseline (vector only), M2 | Current: hybrid + rerank, M3 |
-|---|---|---|
-| Numeric exact match | 25% (2/8) | **88% (7/8)** |
-| Citation accuracy (numbers stated are on the cited page) | 100% (3/3 answered) | 100% (8/8 answered) |
-| Retrieval hit rate (right page in top 5) | 42% (5/12) | 75% (9/12) |
-| Narrative answered | 25% (1/4) | 100% (4/4) |
-| Narrative keyword coverage (rough proxy) | 20% | 57% |
-| Faithfulness (narrative) | not measured yet (M5) | not measured yet (M5) |
-| Refusal rate (should-refuse questions) | 100% (3/3) | 100% (3/3) |
-| p50 / p95 latency | 0.6 s / 4.5 s | 7.6 s / 15.4 s |
-| Cost per query | ~$0.00007 (estimate from Groq list price) | ~$0.00015 |
+| Metric | Baseline (vector only), M2 | Hybrid + rerank, M3 | **Current: agent, M4** |
+|---|---|---|---|
+| Numeric exact match | 25% (2/8) | 88% (7/8) | **100% (8/8)** |
+| Comparison / year-over-year correct | – (added in M4) | 0% (0/4) | **100% (4/4)** |
+| Citation accuracy (each cited number is on its cited page) | 100% (3/3 answered) | 90% (9/10) | **100% (12/12)** |
+| Evidence hit rate (right page retrieved or cited) | 42% (5/12) | 75% (9/12) | 92% (11/12) |
+| Narrative answered | 25% (1/4) | 100% (4/4) | 100% (4/4) |
+| Narrative keyword coverage (rough proxy) | 20% | 57% | 57% |
+| Faithfulness (narrative) | not measured yet (M5) | not measured yet (M5) | not measured yet (M5) |
+| Refusal rate (should-refuse questions) | 100% (3/3) | 100% (3/3) | 100% (3/3) |
+| p50 / p95 latency | 0.6 s / 4.5 s | 7.6 s / 15.4 s | 0.01 s / 7.1 s |
+| Cost per query | ~$0.00007 (estimate from Groq list price) | ~$0.00015 | ~$0.00003 |
+
+**How to read the M4 column.** The 8 number questions and 4 comparisons are answered from `financial_metrics`. Those values were spot-checked against page images in M1, but the expected answers come from the same verified values, so 12/12 shows that routing and phrasing work, not that extraction is perfect. M5 adds questions whose answers are not in the table. Metric answers make no LLM call at all, which is why p50 latency and cost dropped. Narrative questions still go through hybrid search and the LLM. The M3 column's 0/4 on comparisons is plain RAG: retrieving five chunks for one company/year can't answer "compare three companies" or "how did it change".
+
+The citation check was tightened in M4: each number must be on the page of *its own* citation, while computed values (a % change, a ≈ crore conversion, a ranking) are not expected on any page. The M3 rerank column was re-scored with this check (9/10).
 
 The M2 baseline column is from the first run. After M3 re-indexed tables, vector-only scores 3/8 numbers (tables help even without hybrid search). Hybrid without the reranker scores 4/8 numbers and 9/12 retrieval. The reranker (`BAAI/bge-reranker-base`, local GPU) is what lifts numbers to 7/8 by putting the right table row first. A smaller reranker (`ms-marco-MiniLM-L-6-v2`) was tried and made results *worse* (3/8), so it was dropped.
 
@@ -251,7 +256,8 @@ A merge to `main` that passes all checks builds the image, pushes it to ECR and 
   - Done 2026-11-11: `app/rag.py` (no citation, no claim), `python -m app.ask`, a 15-question seed set and `python -m evals.run_evals`. Baseline in [Results](#results).
 - [x] **M3: Hybrid retrieval.** BM25 + vector + reranker. Compare with the baseline.
   - Done 2026-11-11: tables indexed as text rows (column groups labelled), heading-only chunks dropped, BM25 + vector fused with reciprocal rank fusion, `bge-reranker-base` rerank. Numbers 2/8 → 7/8. Comparison in [Results](#results).
-- [ ] **M4: Agent.** LangGraph router with `search_text`, `query_metrics` and `compare` tools; refusal when not found.
+- [x] **M4: Agent.** LangGraph router with `search_text`, `query_metrics` and `compare` tools; refusal when not found.
+  - Done 2026-11-11: rule-based router (deterministic and testable; refuses investment advice and uncovered companies), metric answers phrased from `financial_metrics` with no LLM, year-over-year changes and rankings computed in Python (₹ million converted to crore for ranking), per-company search for text comparisons, and citations renumbered when parts combine. Seed set: numbers 8/8, comparisons 4/4.
 - [ ] **M5: Evals.** 50-question golden set, judge validation, `report.md`.
 - [ ] **M6: Ship.** Docker, CI with eval gate, AWS deployment with billing alarm, Langfuse tracing, public demo link.
 - [ ] **M7: Write-up.** `docs/design.md` (trade-offs, cost, failure modes, how it would scale) and a results table in this README.

@@ -51,10 +51,27 @@ def test_keyword_coverage_and_percentile():
 def test_citation_supports_checks_the_answers_own_numbers():
     from evals.metrics import citation_supports
 
-    page = "Net income was ₹16,642 crores while OCF was ₹19,975 crores"
-    assert citation_supports("Net income was ₹16,642 crores [1].", [page])
-    assert not citation_supports("Net income was ₹16,652 crores [1].", [page])
-    assert citation_supports(
-        "In FY2026, net income was ₹16,642 crores [1].", [page]
-    )  # year ignored
-    assert not citation_supports("Not found in the reports.", [page])  # no claim to support
+    page = {1: "Net income was ₹16,642 crores while OCF was ₹19,975 crores"}
+    assert citation_supports("Net income was ₹16,642 crores [1].", page)
+    assert not citation_supports("Net income was ₹16,652 crores [1].", page)
+    assert citation_supports("In FY2026, net income was ₹16,642 crores [1].", page)  # year ignored
+    assert not citation_supports("Not found in the reports.", page)  # no claim to support
+
+
+def test_each_number_is_checked_against_its_own_citation():
+    from evals.metrics import citation_supports, cited_claims
+
+    text = (
+        "Profit went from ₹17,399 crore in FY2025 [1] to ₹16,652 crore in FY2026 [2], "
+        "a change of -4.3%. Highest: HCLTech."
+    )
+    assert cited_claims(text) == [([17399.0], [1]), ([16652.0], [2])]  # -4.3% is derived
+    assert citation_supports(text, {1: "Profit after tax 17,399", 2: "Profit 16,652"})
+    assert not citation_supports(text, {1: "Profit 16,652", 2: "Profit after tax 17,399"})
+    # An approximate conversion is not a quoted figure.
+    assert cited_claims("₹132,180 million (≈ ₹13,218 crore) [1].") == [([132180.0], [1])]
+
+
+def test_decimal_matches_trailing_zeros():
+    assert contains_number("Operating Margin 16.30%", 16.3)
+    assert not contains_number("16.35%", 16.3)

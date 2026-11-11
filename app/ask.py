@@ -3,7 +3,7 @@
 Usage:
     python -m app.ask "What was TCS's consolidated revenue in FY2025?"
     python -m app.ask --show-excerpts "Why did Infosys's attrition fall in FY2026?"
-    python -m app.ask --retrieval vector "..."   # M2 baseline retrieval
+    python -m app.ask --retrieval vector --no-agent "..."   # M2 baseline
 """
 
 import argparse
@@ -11,6 +11,8 @@ import sys
 
 from sqlalchemy.orm import Session
 
+from app.agent.graph import build_agent
+from app.agent.router import plan
 from app.config import get_settings
 from app.db.models import get_engine
 from app.llm import LLM
@@ -25,13 +27,18 @@ def main() -> None:
     ap.add_argument("question")
     ap.add_argument("--show-excerpts", action="store_true", help="print the retrieved chunks")
     ap.add_argument("--retrieval", choices=sorted(MODES), default="rerank")
+    ap.add_argument("--no-agent", action="store_true", help="plain RAG, no router or tools")
     args = ap.parse_args()
 
     s = get_settings()
     embed = load_embedder(s.embedding_model)
     with Session(get_engine()) as session:
         retrieve = make_retriever(args.retrieval, session, embed)
-        a = answer(args.question, retrieve=retrieve, llm=LLM(), k=s.retrieval_k)
+        if args.no_agent:
+            a = answer(args.question, retrieve=retrieve, llm=LLM(), k=s.retrieval_k)
+        else:
+            print(f"route: {plan(args.question).route}")
+            a = build_agent(session, retrieve, LLM(), s.retrieval_k)(args.question)
 
     print(f"\n{a.text}\n")
     for c in a.citations:

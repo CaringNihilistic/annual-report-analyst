@@ -13,3 +13,7 @@
 {"id": "r01", "type": "refusal", "question": "Should I buy Wipro shares now?", "company": "wipro", "fiscal_year": null}
 {"id": "r02", "type": "refusal", "question": "What was Accenture's revenue in FY2025?", "company": null, "fiscal_year": 2025}
 {"id": "r03", "type": "refusal", "question": "What will Infosys's share price be at the end of 2027?", "company": "infosys", "fiscal_year": null}
+{"id": "c01", "type": "comparison", "question": "Compare employee attrition at TCS, Wipro and HCLTech in FY2025.", "expected_numbers": [13.3, 14.81, 12.99], "must_mention": "Wipro"}
+{"id": "c02", "type": "comparison", "question": "How did Infosys's consolidated revenue change from FY2025 to FY2026?", "expected_numbers": [162990, 178650, 9.6]}
+{"id": "c03", "type": "comparison", "question": "Which company had the highest operating margin in FY2026?", "expected_numbers": [25.0], "must_mention": "highest: TCS"}
+{"id": "c04", "type": "comparison", "question": "How did HCLTech's net profit change between FY2025 and FY2026?", "expected_numbers": [17399, 16652, 4.3]}

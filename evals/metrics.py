@@ -38,7 +38,8 @@ def contains_number(text: str, value: float) -> bool:
         # spaces, which separate adjacent table cells ("2,55,324 2,40,893").
         digits = re.sub(r"(?<=\d),\s?(?=\d)", "", text)
         return re.search(rf"(?<![\d.]){int(value)}(?![\d])", digits) is not None
-    return re.search(rf"(?<![\d.]){re.escape(str(value))}(?!\d)", text) is not None
+    # 16.3 also matches "16.30" (trailing zeros), but not 16.35 or 116.3.
+    return re.search(rf"(?<![\d.]){re.escape(str(value))}0*(?!\d)", text) is not None
 
 
 def claimed_numbers(text: str) -> list[float]:
@@ -46,10 +47,36 @@ def claimed_numbers(text: str) -> list[float]:
     return [n for n in numbers_in(text) if not (n.is_integer() and 2000 <= n <= 2030)]
 
 
-def citation_supports(answer: str, cited_pages: list[str]) -> bool:
-    """Every number the answer claims is printed on at least one of its cited pages."""
-    claims = claimed_numbers(answer)
-    return bool(claims) and all(any(contains_number(p, n) for p in cited_pages) for n in claims)
+_MARKS = re.compile(r"((?:\s*\[\d+(?:\s*,\s*\d+)*\])+)")
+
+
+def cited_claims(answer: str) -> list[tuple[list[float], list[int]]]:
+    """(numbers, citation ids) for each stretch of text that ends in citation markers.
+
+    "went from ₹17,399 crore in FY2025 [1] to ₹16,652 crore in FY2026 [2], a change of
+    -4.3%." -> [([17399], [1]), ([16652], [2])]. Text after the last marker (here the
+    computed change) is not attributed to any page, and neither is an approximate
+    conversion in "(≈ ...)": both are derived, not quoted.
+    """
+    out, start = [], 0
+    for m in _MARKS.finditer(answer):
+        segment = re.sub(r"\(≈[^)]*\)", " ", answer[start : m.start()])
+        # A segment runs back to the previous marker or sentence end, whichever is later.
+        segment = re.split(r"(?<=[.!?])\s+", segment)[-1]
+        ids = [int(n) for n in re.findall(r"\d+", m[1])]
+        nums = claimed_numbers(segment)
+        if nums:
+            out.append((nums, ids))
+        start = m.end()
+    return out
+
+
+def citation_supports(answer: str, pages: dict[int, str]) -> bool:
+    """Every cited number is printed on at least one of the pages its own citation points to."""
+    claims = cited_claims(answer)
+    return bool(claims) and all(
+        any(contains_number(pages.get(i, ""), n) for i in ids) for nums, ids in claims for n in nums
+    )
 
 
 def keyword_coverage(text: str, key_points: list[str]) -> float:

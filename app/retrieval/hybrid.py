@@ -74,8 +74,10 @@ class VectorRetriever:
     def __init__(self, session: Session, embed):
         self.session, self.embed = session, embed
 
-    def __call__(self, question: str, k: int = 5) -> list[Hit]:
-        companies, years = parse_filters(question)
+    def __call__(self, question: str, k: int = 5, companies=None, years=None) -> list[Hit]:
+        parsed = parse_filters(question)
+        companies = parsed[0] if companies is None else companies
+        years = parsed[1] if years is None else years
         return search(self.session, self.embed([question])[0], k, companies, years)
 
 
@@ -98,8 +100,11 @@ class HybridRetriever:
             self._scopes[key] = BM25Scope([Hit(*r, distance=0.0) for r in rows])
         return self._scopes[key]
 
-    def __call__(self, question: str, k: int = 5) -> list[Hit]:
-        companies, years = parse_filters(question)
+    def __call__(self, question: str, k: int = 5, companies=None, years=None) -> list[Hit]:
+        """Filters default to the companies/years named in the question; pass them to override."""
+        parsed = parse_filters(question)
+        companies = parsed[0] if companies is None else companies
+        years = parsed[1] if years is None else years
         vec = search(self.session, self.embed([question])[0], self.n, companies, years)
         kw = self._scope(companies, years).top(question, self.n)
         by_id = {h.chunk_id: h for h in kw} | {h.chunk_id: h for h in vec}

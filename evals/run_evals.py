@@ -22,6 +22,7 @@ from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
+from app.agent.graph import build_agent
 from app.config import ROOT, get_settings
 from app.db.models import get_engine
 from app.llm import LLM
@@ -74,10 +75,19 @@ def score(q: dict, a) -> dict:
         "citations": [str(c) for c in a.citations],
         "retrieved": [f"{h.company} FY{h.fiscal_year} p.{h.page}" for h in a.hits],
     }
-    same_doc = [h for h in a.hits if (h.company, h.fiscal_year) == (q["company"], q["fiscal_year"])]
+    same_doc = [
+        h for h in a.hits if (h.company, h.fiscal_year) == (q.get("company"), q.get("fiscal_year"))
+    ]
+    # Pages the answer cites count as evidence too: the agent's metric answers come from
+    # financial_metrics (with source page) rather than from retrieved chunks.
+    cited_source = any(
+        (c.company, c.fiscal_year, c.page)
+        == (q.get("company"), q.get("fiscal_year"), q.get("source_page"))
+        for c in a.citations
+    )
     if q["type"] == "number":
         row["correct"] = not a.refused and matches_number(a.text, q["expected"])
-        row["retrieval_hit"] = any(
+        row["retrieval_hit"] = cited_source or any(
             h.page == q["source_page"] or contains_number(h.text, q["expected"]) for h in same_doc
         )
         # "Does the cited page contain the claim?" - the numbers the answer states,
@@ -86,13 +96,28 @@ def score(q: dict, a) -> dict:
             None
             if a.refused
             else citation_supports(
-                a.text, [page_text(c.company, c.fiscal_year, c.page) for c in a.citations]
+                a.text, {c.n: page_text(c.company, c.fiscal_year, c.page) for c in a.citations}
             )
         )
     elif q["type"] == "narrative":
         row["answered"] = not a.refused
-        row["retrieval_hit"] = any(h.page == q["source_page"] for h in same_doc)
+        row["retrieval_hit"] = cited_source or any(h.page == q["source_page"] for h in same_doc)
         row["keyword_coverage"] = keyword_coverage(a.text, q["key_points"]) if not a.refused else 0
+    elif q["type"] == "comparison":
+        # Every expected number stated (values, and the computed change where asked), and
+        # the expected leader named when the question asks for a ranking.
+        row["correct"] = (
+            not a.refused
+            and all(matches_number(a.text, n) for n in q["expected_numbers"])
+            and q.get("must_mention", "").lower() in a.text.lower()
+        )
+        row["citation_ok"] = (
+            None
+            if a.refused
+            else citation_supports(
+                a.text, {c.n: page_text(c.company, c.fiscal_year, c.page) for c in a.citations}
+            )
+        )
     else:
         row["correct"] = a.refused
     return row
@@ -107,7 +132,9 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--retrieval", choices=sorted(MODES), default="rerank")
+    ap.add_argument("--agent", action="store_true", help="answer with the M4 agent (router+tools)")
     args = ap.parse_args()
+    name = "agent" if args.agent else args.retrieval
 
     s = get_settings()
     questions = [
@@ -117,22 +144,28 @@ def main() -> None:
     rows, latencies, in_tok, out_tok, fresh = [], [], 0, 0, 0
     with Session(get_engine()) as session:
         retrieve = make_retriever(args.retrieval, session, embed)
+        agent = build_agent(session, retrieve, llm, s.retrieval_k) if args.agent else None
         for q in questions:
             t0 = time.perf_counter()
-            a = answer(q["question"], retrieve=retrieve, llm=llm, k=s.retrieval_k)
+            if agent:
+                a = agent(q["question"])
+            else:
+                a = answer(q["question"], retrieve=retrieve, llm=llm, k=s.retrieval_k)
             wall_s = time.perf_counter() - t0
             c = a.completion
             if c:
                 in_tok, out_tok = in_tok + c.input_tokens, out_tok + c.output_tokens
                 fresh += not c.cached
-                # Latency of a fresh run: wall time, plus the original LLM latency when the
-                # call came from the cache (wall time then covers retrieval only).
-                latencies.append(wall_s + (c.latency_s if c.cached else 0))
+            # Latency of a fresh run: wall time, plus the original LLM latency when the
+            # call came from the cache (wall time then covers retrieval only). Answers from
+            # the metrics table make no LLM call. With several LLM calls per answer
+            # (compare_text), only the last one's latency is known, so this undercounts.
+            latencies.append(wall_s + (c.latency_s if c and c.cached else 0))
             rows.append(score(q, a))
             print(f"{q['id']}: {'refused' if a.refused else a.text[:100]}")
 
     by = lambda t: [r for r in rows if r["type"] == t]  # noqa: E731
-    num, nar, ref = by("number"), by("narrative"), by("refusal")
+    num, nar, ref, cmp_ = by("number"), by("narrative"), by("refusal"), by("comparison")
     price = PRICES.get(llm.model)
     n = len(rows)
     cost = (
@@ -142,7 +175,8 @@ def main() -> None:
     )
     summary = [
         ("Numeric exact match (within 0.5%)", pct([r["correct"] for r in num])),
-        ("Citation accuracy (numeric answers)", pct([r["citation_ok"] for r in num])),
+        ("Comparison / year-over-year correct", pct([r["correct"] for r in cmp_])),
+        ("Citation accuracy (number + comparison)", pct([r["citation_ok"] for r in num + cmp_])),
         (
             "Retrieval hit rate, top-k (number + narrative)",
             pct([r["retrieval_hit"] for r in num + nar]),
@@ -162,10 +196,12 @@ def main() -> None:
         ("Tokens (in / out, all questions)", f"{in_tok} / {out_tok}"),
     ]
     lines = [
-        f"# Eval report: {args.retrieval} ({MODES[args.retrieval]})",
+        f"# Eval report: {name}"
+        + (" (router + tools, rerank retrieval)" if args.agent else f" ({MODES[name]})"),
         "",
         f"Model `{llm.model}`, k={s.retrieval_k}, embeddings `{s.embedding_model}`, "
-        f"{n} questions ({len(num)} number, {len(nar)} narrative, {len(ref)} refusal), "
+        f"{n} questions ({len(num)} number, {len(cmp_)} comparison, {len(nar)} narrative, "
+        f"{len(ref)} refusal), "
         f"{fresh} fresh LLM calls.",
         "",
         "| Metric | Value |",
@@ -196,6 +232,12 @@ def main() -> None:
                 f"retrieval {'hit' if r['retrieval_hit'] else 'miss'}, "
                 f"keywords {100 * r['keyword_coverage']:.0f}%"
             )
+        elif r["type"] == "comparison":
+            res = ("correct" if r["correct"] else "wrong") + (
+                ""
+                if r["citation_ok"] is None
+                else f", citation {'ok' if r['citation_ok'] else 'bad'}"
+            )
         else:
             res = "refused (correct)" if r["correct"] else "answered (should refuse)"
         ans = r["answer"].replace("|", "\\|").replace("\n", " ")
@@ -204,7 +246,7 @@ def main() -> None:
             f"{'; '.join(r['retrieved'])} |"
         )
     REPORTS.mkdir(exist_ok=True)
-    report = REPORTS / f"{args.retrieval}.md"
+    report = REPORTS / f"{name}.md"
     report.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n" + "\n".join(f"{k}: {v}" for k, v in summary))
     print(f"\nwrote {report}")

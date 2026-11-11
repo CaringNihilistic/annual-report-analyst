@@ -1,19 +1,20 @@
 # Eval report: vector (vector search only (M2 baseline))
 
-Model `openai/gpt-oss-20b`, k=5, embeddings `sentence-transformers/all-MiniLM-L6-v2`, 15 questions (8 number, 4 narrative, 3 refusal), 0 fresh LLM calls.
+Model `openai/gpt-oss-20b`, k=5, embeddings `sentence-transformers/all-MiniLM-L6-v2`, 19 questions (8 number, 4 comparison, 4 narrative, 3 refusal), 4 fresh LLM calls.
 
 | Metric | Value |
 |---|---|
 | Numeric exact match (within 0.5%) | 38% (3/8) |
-| Citation accuracy (numeric answers) | 100% (3/3) |
+| Comparison / year-over-year correct | 0% (0/4) |
+| Citation accuracy (number + comparison) | 100% (4/4) |
 | Retrieval hit rate, top-k (number + narrative) | 42% (5/12) |
 | Narrative answered (not refused) | 25% (1/4) |
 | Narrative keyword coverage (proxy, not faithfulness) | 20% |
 | Faithfulness (narrative) | not measured yet (M5: RAGAS + judge) |
 | Refusal rate (should-refuse questions) | 100% (3/3) |
-| p50 / p95 latency | 3.22s / 8.64s |
+| p50 / p95 latency | 1.55s / 8.62s |
 | Cost per query (est.) | $0.00009 |
-| Tokens (in / out, all questions) | 15169 / 611 |
+| Tokens (in / out, all questions) | 19228 / 804 |
 
 Cost uses Groq list prices in `PRICES` (an assumption; check the Groq console).
 
@@ -36,3 +37,7 @@ Cost uses Groq list prices in `PRICES` (an assumption; check the Groq console).
 | r01 | refusal | refused (correct) | Not found in the reports. |  | wipro FY2026 p.33; wipro FY2026 p.35; wipro FY2025 p.101; wipro FY2025 p.17; wipro FY2026 p.114 |
 | r02 | refusal | refused (correct) | Not found in the reports. |  | hcltech FY2025 p.107; techmahindra FY2025 p.411; techmahindra FY2025 p.33; hcltech FY2025 p.79; techmahindra FY2025 p.209 |
 | r03 | refusal | refused (correct) | Not found in the reports. |  | infosys FY2025 p.110; infosys FY2026 p.120; infosys FY2026 p.357; infosys FY2025 p.231; infosys FY2026 p.245 |
+| c01 | comparison | wrong | Not found in the reports. |  | tcs FY2025 p.140; tcs FY2025 p.85; hcltech FY2025 p.11; tcs FY2025 p.141; tcs FY2025 p.131 |
+| c02 | comparison | wrong | Not found in the reports. |  | infosys FY2026 p.288; infosys FY2026 p.357; infosys FY2026 p.33; infosys FY2025 p.8; infosys FY2026 p.255 |
+| c03 | comparison | wrong, citation ok | The company with the highest operating margin in FY2026 was TCS, reporting an operating margin of 25%[1]. | [1] TCS FY2026, p.6 | tcs FY2026 p.6; techmahindra FY2026 p.253; wipro FY2026 p.33; techmahindra FY2026 p.20; techmahindra FY2026 p.33 |
+| c04 | comparison | wrong | Not found in the reports. |  | hcltech FY2026 p.123; hcltech FY2025 p.79; hcltech FY2026 p.128; hcltech FY2025 p.107; hcltech FY2026 p.123 |

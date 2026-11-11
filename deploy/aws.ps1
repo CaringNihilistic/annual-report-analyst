@@ -44,7 +44,7 @@ switch ($Action) {
         $id = aws ec2 run-instances --image-id $ami --instance-type t3.small --count 1 `
             --iam-instance-profile Name=ragg-ec2-profile --security-group-ids $sg `
             --user-data "file://$userData" `
-            --credit-specification CpuCredits=standard `
+            --credit-specification CpuCredits=unlimited `
             --metadata-options "HttpTokens=required,HttpPutResponseHopLimit=2,HttpEndpoint=enabled" `
             --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=20,VolumeType=gp3,Encrypted=true,DeleteOnTermination=true}" `
             --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$Name},{Key=project,Value=ragg}]" `

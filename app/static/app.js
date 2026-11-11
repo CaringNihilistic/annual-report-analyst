@@ -254,7 +254,9 @@ async function ask(question, { echo = true } = {}) {
   const tick = setInterval(() => {
     const s = Math.round((performance.now() - started) / 1000);
     pending.label.textContent = `Searching the reports… ${s} s`;
-    if (s === 8) pending.hint.textContent = "The first question after a restart loads the models (about 30 s).";
+    if (s === 6) pending.hint.textContent =
+      "Questions about the report text are re-ranked on a small CPU server and can take 30–40 s. " +
+      "Figures and comparisons are near-instant.";
   }, 1000);
 
   try {

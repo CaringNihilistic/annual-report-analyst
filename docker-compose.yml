@@ -6,13 +6,26 @@ services:
       POSTGRES_PASSWORD: rag
       POSTGRES_DB: annual_reports
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"  # reachable from this machine only, never from the internet
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rag -d annual_reports"]
       interval: 5s
       retries: 10
+
+  api:
+    build: .
+    profiles: ["app"]  # `docker compose up db` stays the dev default; add --profile app for the API
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://rag:rag@db:5432/annual_reports
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:

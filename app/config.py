@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
 
-    database_url: str = "postgresql+psycopg://rag:rag@localhost:5432/annual_reports"
+    database_url: str = "postgresql+psycopg://rag:rag@127.0.0.1:5432/annual_reports"
 
     groq_api_key: str = ""
     anthropic_api_key: str = ""

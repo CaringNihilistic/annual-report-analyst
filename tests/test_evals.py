@@ -106,3 +106,18 @@ def test_verdicts_ignore_the_instruction_line():
         "## 3. Q\n\n**Your verdict:** ?\n"
     )
     assert parse_verdicts(sheet) == ["yes", "no", "?"]
+
+
+def test_gate_fails_on_wrong_answers_and_bad_citations():
+    from evals.gate import GATE_IDS, failures
+
+    assert len(GATE_IDS) == 15 and len(set(GATE_IDS)) == 15
+    rows = [
+        {"id": "n01", "correct": True, "citation_ok": True, "answer": "₹2,55,324 crore [1]"},
+        {"id": "r01", "correct": True, "answer": "This assistant does not give advice."},
+        {"id": "n02", "correct": False, "citation_ok": None, "answer": "Not found."},
+        {"id": "c05", "correct": True, "citation_ok": False, "answer": "TCS [1]"},
+    ]
+    out = failures(rows)
+    assert [f.split(":")[0] for f in out] == ["n02", "c05"]
+    assert failures(rows[:2]) == []

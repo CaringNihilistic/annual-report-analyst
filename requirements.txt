@@ -9,5 +9,6 @@ docling>=2.15
 
 # Dev
 httpx>=0.27  # FastAPI's TestClient
+pandas>=2.0  # tests/test_parse.py (Docling installs it too)
 pytest>=8.0
 ruff>=0.6

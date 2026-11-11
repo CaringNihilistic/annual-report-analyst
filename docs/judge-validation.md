@@ -26,7 +26,7 @@ Analysis of revenue growth and margin performance On a reported basis, TCS' reve
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 2. What drove Wipro's revenue growth in fiscal year 2026?
 
@@ -50,7 +50,7 @@ Financial Performance For segment reporting, we have included the impact of exch
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 3. Why did Wipro's general and administrative expenses increase in FY2026?
 
@@ -62,7 +62,7 @@ Selling and Marketing Expenses: Our selling and marketing expenses as a percenta
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 4. What exceptional item did Infosys report in FY2026, and what was its consolidated impact?
 
@@ -80,7 +80,7 @@ Selling and Marketing Expenses: Our selling and marketing expenses as a percenta
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 5. Why did Wipro's cost of revenues increase in fiscal year 2026?
 
@@ -104,7 +104,7 @@ Revenue of the IT Products segment increased by 157.8%. This growth was driven b
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 6. Why did Wipro's selling and marketing expenses decrease in fiscal year 2026?
 
@@ -116,7 +116,7 @@ Selling and Marketing Expenses: Our selling and marketing expenses as a percenta
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 7. What income tax orders affected Infosys's other income and tax expense in fiscal 2025?
 
@@ -128,7 +128,7 @@ Infosys is subject to a 15% Branch Profit Tax (BPT) in the US to the extent its 
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** no
 
 ## 8. What dividends did TCS declare for FY2025?
 
@@ -146,7 +146,7 @@ Shareholder Payouts Shareholder Payout Shareholder Payout ratio TCS has consiste
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 9. How does HCLTech describe its AI positioning in its FY2026 Directors' Report?
 
@@ -158,7 +158,7 @@ Dear Shareholders, In 2026, the HCL Group marks its 50th anniversary, a proud mo
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** no
 
 ## 10. What does Tech Mahindra's FY2026 turnover rate for permanent employees cover?
 
@@ -170,7 +170,7 @@ Dear Shareholders, In 2026, the HCL Group marks its 50th anniversary, a proud mo
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 11. Why did TCS's operating margin expand in FY2026?
 
@@ -188,7 +188,7 @@ Analysis of revenue growth and margin performance On a reported basis, TCS' reve
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 12. What drove Wipro's revenue growth in fiscal year 2026?
 
@@ -200,7 +200,7 @@ Financial Performance For segment reporting, we have included the impact of exch
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 13. Why did Wipro's cost of revenues increase in fiscal year 2026?
 
@@ -212,7 +212,7 @@ Revenue of the IT Products segment increased by 157.8%. This growth was driven b
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 14. What does Tech Mahindra's FY2026 turnover rate for permanent employees cover?
 
@@ -230,7 +230,7 @@ Table: 22. Turnover rate for permanent employees *Key Managerial Personnel incl
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes
 
 ## 15. Why did Wipro's selling and marketing expenses decrease in fiscal year 2026?
 
@@ -248,4 +248,4 @@ Selling and marketing expenses as a percentage of revenue from our IT Services s
 
 </details>
 
-**Your verdict:** ?
+**Your verdict:** yes

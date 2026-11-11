@@ -95,3 +95,14 @@ def test_judge_verdict_parsing():
     assert (v.supported, v.total, v.faithfulness, v.faithful) == (1, 2, 0.5, False)
     assert parse_verdict("not json").total == 0 and parse_verdict("not json").faithfulness is None
     assert '<source n="1">' in build_judge_prompt("q", "a", ["text"])
+
+
+def test_verdicts_ignore_the_instruction_line():
+    from evals.judge_validation import parse_verdicts
+
+    sheet = (
+        "Replace `?` after **Your verdict:** with `yes` or `no`.\n\n"
+        "## 1. Q\n\n**Your verdict:** yes\n\n## 2. Q\n\n**Your verdict:** No\n\n"
+        "## 3. Q\n\n**Your verdict:** ?\n"
+    )
+    assert parse_verdicts(sheet) == ["yes", "no", "?"]

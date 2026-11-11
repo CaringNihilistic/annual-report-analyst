@@ -65,11 +65,14 @@ def build() -> None:
     print(f"wrote {SHEET} ({len(items)} answers) and {ITEMS}")
 
 
+def parse_verdicts(sheet: str) -> list[str]:
+    """One verdict per item: only lines that *start* with the marker (not the instructions)."""
+    return [v.lower() for v in re.findall(r"^\*\*Your verdict:\*\*[ \t]*(\S+)", sheet, re.M)]
+
+
 def score() -> None:
     items = [json.loads(line) for line in ITEMS.read_text(encoding="utf-8").splitlines() if line]
-    human = [
-        v.lower() for v in re.findall(r"\*\*Your verdict:\*\*\s*(\S+)", SHEET.read_text("utf-8"))
-    ]
+    human = parse_verdicts(SHEET.read_text("utf-8"))
     graded = [(it, h == "yes") for it, h in zip(items, human, strict=False) if h in ("yes", "no")]
     if not graded:
         print("No grades yet: fill in 'Your verdict:' in docs/judge-validation.md.")

@@ -36,3 +36,34 @@ def test_different_prompt_or_model_is_not_cached(tmp_path):
     LLM(client=client, model="a", cache_dir=tmp_path).complete("s", "u2")
     LLM(client=client, model="b", cache_dir=tmp_path).complete("s", "u1")
     assert client.calls == 3
+
+
+def test_retry_after_parsing():
+    from app.llm import retry_after_seconds
+
+    assert retry_after_seconds("Please try again in 8m40.128s. Need more") == 520.128
+    assert retry_after_seconds("try again in 12.5s") == 12.5
+    assert retry_after_seconds("try again in 1h2m3s") == 3723
+    assert retry_after_seconds("no hint here") == 30.0
+
+
+def test_rate_limit_is_retried(tmp_path, monkeypatch):
+    import app.llm as llm_mod
+
+    class RateLimited(Exception):
+        status_code = 429
+
+    client = FakeClient()
+    real = client._create
+    failures = iter([RateLimited("Please try again in 1.5s")])
+
+    def flaky(**kw):
+        for e in failures:
+            raise e
+        return real(**kw)
+
+    client.chat.completions.create = flaky
+    slept = []
+    monkeypatch.setattr(llm_mod.time, "sleep", slept.append)
+    out = LLM(client=client, model="m", cache_dir=tmp_path).complete("s", "u")
+    assert out.text and slept == [3.5]

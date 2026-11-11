@@ -183,3 +183,28 @@ def search_text(question: str, retrieve, llm, k: int = 5, companies=None, years=
         return retrieve(q, kk, companies=companies, years=years)
 
     return answer(question, retrieve=pinned, llm=llm, k=k)
+
+
+CHANGE_HINT = (
+    "\n\n(For a change between years: state each year's value with its citation, then the "
+    "percentage change.)"
+)
+
+
+def search_text_change(question: str, retrieve, llm, k: int, companies, years) -> Answer:
+    """Text answer about a change: retrieve each year separately so both years' pages are in
+    the context, then ask once. A single search tends to return pages from only one year."""
+    per_year = max(2, k // len(years) + 1)
+
+    def both_years(q, kk):
+        hits, seen = [], set()
+        for y in years:
+            for h in retrieve(q, per_year, companies=companies or None, years=[y]):
+                if h.chunk_id not in seen:
+                    seen.add(h.chunk_id)
+                    hits.append(h)
+        return hits
+
+    a = answer(question + CHANGE_HINT, retrieve=both_years, llm=llm, k=k)
+    a.question = question
+    return a

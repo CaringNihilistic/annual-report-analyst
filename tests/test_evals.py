@@ -75,3 +75,23 @@ def test_each_number_is_checked_against_its_own_citation():
 def test_decimal_matches_trailing_zeros():
     assert contains_number("Operating Margin 16.30%", 16.3)
     assert not contains_number("16.35%", 16.3)
+
+
+def test_states_change_uses_absolute_tolerance_and_ignores_sign():
+    from evals.metrics import states_change
+
+    assert states_change("fell from ₹1,74,957 to ₹1,73,422, a change of -0.9%", 0.88)
+    assert states_change("a change of -4.3%", 4.98) is False
+    assert states_change("up 20.1%", 20.1)
+
+
+def test_judge_verdict_parsing():
+    from evals.judge import build_judge_prompt, parse_verdict
+
+    v = parse_verdict(
+        'Sure: {"claims": [{"claim": "Margin rose", "supported": true},'
+        ' {"claim": "Due to AI", "supported": false}]}'
+    )
+    assert (v.supported, v.total, v.faithfulness, v.faithful) == (1, 2, 0.5, False)
+    assert parse_verdict("not json").total == 0 and parse_verdict("not json").faithfulness is None
+    assert '<source n="1">' in build_judge_prompt("q", "a", ["text"])

@@ -17,7 +17,7 @@ from langgraph.graph import END, START, StateGraph
 from sqlalchemy.orm import Session
 
 from app.agent.router import Plan, plan
-from app.agent.tools import compare, query_metrics, search_text
+from app.agent.tools import compare, query_metrics, search_text, search_text_change
 from app.rag import COMPANY_NAMES, REFUSAL, Answer, Citation
 
 ADVICE_REFUSAL = (
@@ -77,7 +77,12 @@ def build_agent(session: Session, retrieve, llm, k: int = 5):
         return {"parts": state["parts"] + [part]}
 
     def text(state: State) -> State:
-        return {"parts": state["parts"] + [search_text(state["question"], retrieve, llm, k)]}
+        p, q = state["plan"], state["question"]
+        if p.route == "text" and p.change:
+            part = search_text_change(q, retrieve, llm, k, p.companies, p.years)
+        else:
+            part = search_text(q, retrieve, llm, k)
+        return {"parts": state["parts"] + [part]}
 
     def compare_text(state: State) -> State:
         p, q, parts = state["plan"], state["question"], list(state["parts"])

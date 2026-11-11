@@ -28,12 +28,14 @@ from app.db.models import get_engine
 from app.llm import LLM
 from app.rag import answer
 from app.retrieval.factory import MODES, make_retriever
+from evals.judge import cited_sources, judge
 from evals.metrics import (
     citation_supports,
     contains_number,
     keyword_coverage,
     matches_number,
     percentile,
+    states_change,
 )
 from ingest.index import load_embedder
 
@@ -103,12 +105,24 @@ def score(q: dict, a) -> dict:
         row["answered"] = not a.refused
         row["retrieval_hit"] = cited_source or any(h.page == q["source_page"] for h in same_doc)
         row["keyword_coverage"] = keyword_coverage(a.text, q["key_points"]) if not a.refused else 0
-    elif q["type"] == "comparison":
-        # Every expected number stated (values, and the computed change where asked), and
+        if not a.refused:
+            sources = cited_sources(a, page_text)
+            v = judge(q["question"], a.text, sources)
+            row["faithfulness"] = v.faithfulness
+            row["judge"] = {
+                "question": q["question"],
+                "answer": a.text,
+                "sources": sources,
+                "claims": v.claims,
+                "faithful": v.faithful,
+            }
+    elif q["type"] in ("comparison", "yoy"):
+        # Every expected value stated, the computed change where asked (within 0.15), and
         # the expected leader named when the question asks for a ranking.
         row["correct"] = (
             not a.refused
             and all(matches_number(a.text, n) for n in q["expected_numbers"])
+            and ("expected_change" not in q or states_change(a.text, q["expected_change"]))
             and q.get("must_mention", "").lower() in a.text.lower()
         )
         row["citation_ok"] = (
@@ -165,7 +179,9 @@ def main() -> None:
             print(f"{q['id']}: {'refused' if a.refused else a.text[:100]}")
 
     by = lambda t: [r for r in rows if r["type"] == t]  # noqa: E731
-    num, nar, ref, cmp_ = by("number"), by("narrative"), by("refusal"), by("comparison")
+    num, nar, ref = by("number"), by("narrative"), by("refusal")
+    yoy, cmp_ = by("yoy"), by("comparison")
+    faith = [r["faithfulness"] for r in nar if r.get("faithfulness") is not None]
     price = PRICES.get(llm.model)
     n = len(rows)
     cost = (
@@ -175,8 +191,12 @@ def main() -> None:
     )
     summary = [
         ("Numeric exact match (within 0.5%)", pct([r["correct"] for r in num])),
-        ("Comparison / year-over-year correct", pct([r["correct"] for r in cmp_])),
-        ("Citation accuracy (number + comparison)", pct([r["citation_ok"] for r in num + cmp_])),
+        ("Year-over-year correct", pct([r["correct"] for r in yoy])),
+        ("Comparison correct", pct([r["correct"] for r in cmp_])),
+        (
+            "Citation accuracy (number + yoy + comparison)",
+            pct([r["citation_ok"] for r in num + yoy + cmp_]),
+        ),
         (
             "Retrieval hit rate, top-k (number + narrative)",
             pct([r["retrieval_hit"] for r in num + nar]),
@@ -186,7 +206,14 @@ def main() -> None:
             "Narrative keyword coverage (proxy, not faithfulness)",
             f"{100 * sum(r['keyword_coverage'] for r in nar) / max(1, len(nar)):.0f}%",
         ),
-        ("Faithfulness (narrative)", "not measured yet (M5: RAGAS + judge)"),
+        (
+            "Faithfulness (narrative, LLM judge: supported claims / claims)",
+            f"{100 * sum(faith) / len(faith):.0f}% over {len(faith)} answers" if faith else "n/a",
+        ),
+        (
+            "Narrative answers with every claim supported",
+            pct([r["judge"]["faithful"] for r in nar if "judge" in r]),
+        ),
         ("Refusal rate (should-refuse questions)", pct([r["correct"] for r in ref])),
         (
             "p50 / p95 latency",
@@ -200,8 +227,8 @@ def main() -> None:
         + (" (router + tools, rerank retrieval)" if args.agent else f" ({MODES[name]})"),
         "",
         f"Model `{llm.model}`, k={s.retrieval_k}, embeddings `{s.embedding_model}`, "
-        f"{n} questions ({len(num)} number, {len(cmp_)} comparison, {len(nar)} narrative, "
-        f"{len(ref)} refusal), "
+        f"{n} questions ({len(num)} number, {len(yoy)} yoy, {len(cmp_)} comparison, "
+        f"{len(nar)} narrative, {len(ref)} refusal), "
         f"{fresh} fresh LLM calls.",
         "",
         "| Metric | Value |",
@@ -232,7 +259,7 @@ def main() -> None:
                 f"retrieval {'hit' if r['retrieval_hit'] else 'miss'}, "
                 f"keywords {100 * r['keyword_coverage']:.0f}%"
             )
-        elif r["type"] == "comparison":
+        elif r["type"] in ("comparison", "yoy"):
             res = ("correct" if r["correct"] else "wrong") + (
                 ""
                 if r["citation_ok"] is None
@@ -248,6 +275,11 @@ def main() -> None:
     REPORTS.mkdir(exist_ok=True)
     report = REPORTS / f"{name}.md"
     report.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Judge inputs and verdicts, for validating the judge against human grades.
+    judged = [{"id": r["id"], **r["judge"]} for r in rows if "judge" in r]
+    (REPORTS / f"{name}.judge.jsonl").write_text(
+        "".join(json.dumps(j, ensure_ascii=False) + "\n" for j in judged), encoding="utf-8"
+    )
     print("\n" + "\n".join(f"{k}: {v}" for k, v in summary))
     print(f"\nwrote {report}")
 

@@ -22,7 +22,7 @@ YEARS = [2025, 2026]
 METRIC_KEYWORDS: dict[str, list[str]] = {
     "attrition": [r"\battrition\b", r"\bturnover rate\b", r"\bemployee turnover\b"],
     "operating_margin": [
-        r"\boperating (profit )?margin\b",
+        r"\boperating (profit )?margins?\b",
         r"\bebit margin\b",
         r"\boperating profit ratio\b",
     ],
@@ -43,6 +43,20 @@ METRIC_KEYWORDS: dict[str, list[str]] = {
         r"\bworkforce\b",
     ],
 }
+# Other line items whose names contain a metric's words. When a question names one of these,
+# the metrics table doesn't hold the answer, so the question goes to text search instead.
+OTHER_LINE_ITEMS = re.compile(
+    r"\b(profit before tax|pbt|other income|total income|other comprehensive income|"
+    r"cost of revenues?|costs? of sales|expenses?|earnings per share|eps|dividends?|"
+    r"exceptional items?|gross margin|segment|ebitda)\b",
+    re.I,
+)
+# "What does X cover / measure / include?" asks for a definition, not the figure.
+DEFINITION = re.compile(
+    r"\bwhat does .+\b(cover|measure|include|exclude|mean|represent)\b"
+    r"|\bhow is .+ (defined|calculated)\b",
+    re.I,
+)
 ADVICE = re.compile(
     r"\b(should i|buy|sell|invest(ment)? advice|share price|stock price|target price|"
     r"price target|undervalued|overvalued|good investment)\b",
@@ -83,7 +97,10 @@ def find_metric(question: str) -> str | None:
 def plan(question: str) -> Plan:
     companies, years = parse_filters(question)
     metric = find_metric(question)
+    if OTHER_LINE_ITEMS.search(question) or DEFINITION.search(question):
+        metric = None
     wants_all = bool(ALL_SCOPE.search(question))
+    change = bool(CHANGE.search(question)) or len(years) > 1
 
     if ADVICE.search(question):
         return Plan("refuse", reason="investment advice or share prices are out of scope")
@@ -93,7 +110,6 @@ def plan(question: str) -> Plan:
         return Plan("refuse", metric=metric, reason="the question names no covered company")
 
     if metric:
-        change = bool(CHANGE.search(question)) or len(years) > 1
         companies = companies or ALL_COMPANIES
         years = YEARS if change else (years or [YEARS[-1]])
         return Plan(
@@ -107,4 +123,5 @@ def plan(question: str) -> Plan:
 
     if len(companies) > 1:
         return Plan("compare_text", companies=companies, years=years)
-    return Plan("text", companies=companies, years=years)
+    # A text question about a change needs both years' pages (see the graph's text node).
+    return Plan("text", companies=companies, years=YEARS if change else years, change=change)

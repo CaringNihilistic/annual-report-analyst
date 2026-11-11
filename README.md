@@ -188,23 +188,51 @@ python -c "import torch; print(torch.cuda.is_available())"   # should print True
 | Type | Count | Scored by |
 |---|---|---|
 | Single number ("FY25 revenue of Wipro") | 15 | Exact match within 0.5% |
-| Year-over-year change | 10 | Exact match on the computed change |
+| Year-over-year change | 10 | Both years' values within 0.5%, and the change within 0.15 (% or points) |
 | Cross-company comparison | 10 | All numbers correct + correct ranking |
-| "Why" / narrative | 10 | RAGAS faithfulness + LLM-as-judge (rubric) |
+| "Why" / narrative | 10 | Faithfulness from an LLM judge (claims supported by the cited sources) |
 | Not in the reports (should refuse) | 5 | Refusal rate |
 
-Also measured: retrieval hit rate (is the right page in the top 5?), citation accuracy (does the cited page actually contain the claim?), latency (p50, p95) and cost per query.
+Expected answers were read off page images (the M1 spot-check pages), not taken from the pipeline's output. 18 of the questions ask for figures that are *not* in `financial_metrics` (profit before tax, other income, EPS, dividends, expenses), so they test text retrieval rather than the table.
 
-The LLM judge is checked against 15 hand-graded answers, and the agreement rate is reported.
+Also measured: retrieval hit rate (is the right page in the top 5?), citation accuracy (is each cited number on the page of its own citation?), latency (p50, p95) and cost per query.
+
+**Faithfulness judge.** RAGAS's definition (supported claims / total claims), implemented directly in `evals/judge.py` instead of with the RAGAS package. The package would have pulled in LangChain and an OpenAI-compatible wrapper for this one metric. The judge is `openai/gpt-oss-120b`, a larger model than the generator. It splits the answer into claims and checks each one against the text of the cited sources. The judge is checked against hand-graded answers (`docs/judge-validation.md`), and the agreement rate is reported.
 
 ```bash
-python -m evals.run_evals     # full suite → evals/report.md
-python -m evals.gate          # 15-question subset, exits non-zero on regression
+python -m evals.run_evals --agent                # full suite → evals/reports/agent.md
+python -m evals.judge_validation build|score     # judge vs human grades
+python -m evals.gate                             # (M6) 15-question subset, exits non-zero on regression
 ```
+
+Note: Groq's free tier allows 200,000 tokens a day for `gpt-oss-20b`. A full uncached run of all modes exceeds that, so the LLM client waits and retries when rate-limited, and responses are cached.
 
 ### Results
 
-Measured on the seed set: 19 questions (8 number, 4 comparison / year-over-year, 4 narrative, 3 refusal), which grows to 50 in M5. Model `openai/gpt-oss-20b` on Groq, top 5 chunks. Full output per mode: `evals/reports/<mode>.md` (`python -m evals.run_evals --retrieval vector|hybrid|rerank` or `--agent`).
+**M5: full golden set (50 questions).** Model `openai/gpt-oss-20b` on Groq, top 5 chunks, faithfulness judged by `openai/gpt-oss-120b`. Reports: `evals/reports/agent-blind.md` and `evals/reports/rerank.md`.
+
+| Metric | Plain RAG (hybrid + rerank) | **Agent, blind run (headline)** |
+|---|---|---|
+| Numeric exact match (within 0.5%) | 80% (12/15) | **80% (12/15)** |
+| Year-over-year correct | 0% (0/10) | **40% (4/10)** |
+| Comparison correct | 0% (0/10) | **80% (8/10)** |
+| Citation accuracy (each cited number on its cited page) | 67% (16/24) | **88% (28/32)** |
+| Evidence hit rate (number + narrative) | 76% (19/25) | **84% (21/25)** |
+| Narrative answered | 100% (10/10) | 100% (10/10) |
+| Faithfulness (narrative, LLM judge: supported / total claims) | 93% | 91% |
+| Narrative answers with every claim supported | 90% (9/10) | 80% (8/10) |
+| Narrative keyword coverage (rough proxy) | 51% | 41% |
+| Refusal rate (should-refuse questions) | 100% (5/5) | 100% (5/5) |
+| p50 / p95 latency | 4.3 s / 16.2 s | 0.01 s / 16.2 s |
+| Cost per query (estimate from Groq list prices) | ~$0.00015 | ~$0.00006 |
+
+**Why "blind".** This is the first run of the M4 agent on the 50 questions, with no changes made after seeing them, so it is the honest number. It exposed router bugs: "profit before tax" and "cost of revenues" were routed to the `net_profit` / `revenue` metrics (wrong figure, e.g. y02, y05, n10), "operating margins" (plural) was missed, a "what does X cover?" question got just a number, and text-only year-over-year questions retrieved only one year. These are fixed in `app/agent/router.py`, `tools.py` and `graph.py`, with tests. A re-run with the fixes is **pending** because it is blocked by Groq's free-tier daily token limit. When it finishes, its scores will be added here and labelled *optimistic*, because the fixes were made after seeing the set.
+
+Still missed, and not fixed: TCS other income (n09) and Wipro employee benefit expense (n11), where retrieval misses the right note; Infosys EPS change (y06); one comparison not found (c10). The vector-only and hybrid (no rerank) modes were not re-run on the 50 questions, to save the daily token budget. Their 19-question results are below.
+
+**Judge validation: pending.** `docs/judge-validation.md` holds 14 narrative answers (10 agent, 4 plain RAG where its answer differs), with the judge's verdicts hidden, for a human to grade. Agreement and Cohen's kappa will be recorded here once graded. Until then, treat the faithfulness numbers as unvalidated.
+
+**M2–M4: seed set (19 questions).** 8 number, 4 comparison / year-over-year, 4 narrative, 3 refusal. Full output per mode: `evals/reports/<mode>.md` (`python -m evals.run_evals --retrieval vector|hybrid|rerank` or `--agent`).
 
 | Metric | Baseline (vector only), M2 | Hybrid + rerank, M3 | **Current: agent, M4** |
 |---|---|---|---|
@@ -258,7 +286,8 @@ A merge to `main` that passes all checks builds the image, pushes it to ECR and 
   - Done 2026-11-11: tables indexed as text rows (column groups labelled), heading-only chunks dropped, BM25 + vector fused with reciprocal rank fusion, `bge-reranker-base` rerank. Numbers 2/8 → 7/8. Comparison in [Results](#results).
 - [x] **M4: Agent.** LangGraph router with `search_text`, `query_metrics` and `compare` tools; refusal when not found.
   - Done 2026-11-11: rule-based router (deterministic and testable; refuses investment advice and uncovered companies), metric answers phrased from `financial_metrics` with no LLM, year-over-year changes and rankings computed in Python (₹ million converted to crore for ranking), per-company search for text comparisons, and citations renumbered when parts combine. Seed set: numbers 8/8, comparisons 4/4.
-- [ ] **M5: Evals.** 50-question golden set, judge validation, `report.md`.
+- [x] **M5: Evals.** 50-question golden set, judge validation, `report.md`.
+  - Done 2026-11-11: 50 questions with expected answers read off page images (18 ask for figures outside `financial_metrics`), year-over-year and comparison scoring, a faithfulness judge (`gpt-oss-120b`), and a blind agent run: numbers 12/15, year-over-year 4/10, comparisons 8/10, citations 28/32, faithfulness 91%. Router fixes from the blind run are in; the post-fix re-run and the human grading of the judge (`docs/judge-validation.md`) are still pending. See [Results](#results).
 - [ ] **M6: Ship.** Docker, CI with eval gate, AWS deployment with billing alarm, Langfuse tracing, public demo link.
 - [ ] **M7: Write-up.** `docs/design.md` (trade-offs, cost, failure modes, how it would scale) and a results table in this README.
 

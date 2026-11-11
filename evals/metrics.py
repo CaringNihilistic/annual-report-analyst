@@ -79,6 +79,15 @@ def citation_supports(answer: str, pages: dict[int, str]) -> bool:
     )
 
 
+def states_change(text: str, expected_change: float, tol: float = 0.15) -> bool:
+    """A computed change (% or percentage points) is stated within `tol` of the expected size.
+
+    Absolute tolerance, because a change can be legitimately rounded (-0.877% -> "-0.9%").
+    The sign is not checked: "fell 4.3%" and "-4.3%" are both right.
+    """
+    return any(abs(n - abs(expected_change)) <= tol for n in numbers_in(text))
+
+
 def keyword_coverage(text: str, key_points: list[str]) -> float:
     """Share of key points mentioned (case-insensitive). A cheap proxy, not faithfulness."""
     if not key_points:

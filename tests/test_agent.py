@@ -153,3 +153,41 @@ def test_agent_end_to_end_without_network(monkeypatch):
 def test_profit_and_loss_is_not_a_profit_question():
     q = "Tech Mahindra's consolidated revenue recognised in the statement of profit and loss?"
     assert plan(q).metric == "revenue"
+
+
+@pytest.mark.parametrize(
+    "question, route",
+    [
+        ("What was Infosys's consolidated profit before tax for fiscal 2025?", "text"),
+        ("Why did Wipro's cost of revenues increase in fiscal year 2026?", "text"),
+        ("How did TCS's EPS change from FY2025 to FY2026?", "text"),
+        ("What does Tech Mahindra's FY2026 turnover rate for permanent employees cover?", "text"),
+        ("Compare the operating margins of Infosys, Wipro and HCLTech in FY2025.", "metrics"),
+    ],
+)
+def test_router_line_items_definitions_and_plurals(question, route):
+    assert plan(question).route == route
+
+
+def test_text_change_question_searches_each_year():
+    from app.agent.tools import search_text_change
+    from app.retrieval.vector import Hit
+
+    calls = []
+
+    def retrieve(q, k, companies=None, years=None):
+        calls.append(years)
+        y = years[0]
+        return [Hit(y, "tcs", y, 1, None, f"EPS {y}", 0.0)]
+
+    class LLMStub:
+        def complete(self, system, user):
+            from app.llm import Completion
+
+            assert "EPS 2025" in user and "EPS 2026" in user and "percentage change" in user
+            return Completion("EPS rose from 134.19 [1] to 145.99 [2], +8.8%.", "m", 1, 1, 0.1)
+
+    p = plan("How did TCS's EPS change from FY2025 to FY2026?")
+    a = search_text_change("q", retrieve, LLMStub(), 5, p.companies, p.years)
+    assert calls == [[2025], [2026]]
+    assert [c.fiscal_year for c in a.citations] == [2025, 2026]

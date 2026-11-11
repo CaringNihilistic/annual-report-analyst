@@ -1,4 +1,5 @@
 """HTTP API: POST /ask answers one question with citations, GET /health checks the database.
+GET / serves the chat page (app/static: plain HTML, CSS and JavaScript, no build step).
 
     uvicorn app.api:app --port 8000
 
@@ -10,9 +11,12 @@ for fakes (FastAPI dependency overrides), so they need no models, database or AP
 import logging
 from collections.abc import Callable
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -23,6 +27,7 @@ from app.db.models import get_engine
 from app.llm import LLM
 from app.rag import COMPANY_NAMES, Answer
 
+STATIC = Path(__file__).parent / "static"
 DISCLAIMER = "Answers come only from the companies' annual reports. Not investment advice."
 log = logging.getLogger(__name__)
 
@@ -32,6 +37,12 @@ app = FastAPI(
     "answered with page citations.",
     version="0.6.0",
 )
+app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def index() -> FileResponse:
+    return FileResponse(STATIC / "index.html")
 
 
 class AskRequest(BaseModel):

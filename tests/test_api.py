@@ -66,3 +66,22 @@ def test_health_ok_and_down():
 
     app.dependency_overrides[get_db_check] = lambda: down
     assert client.get("/health").status_code == 503
+
+
+def test_chat_page_and_assets_are_served():
+    page = client.get("/")
+    assert page.status_code == 200 and "text/html" in page.headers["content-type"]
+    assert "/static/app.js" in page.text and "/static/style.css" in page.text
+    assert client.get("/static/app.js").status_code == 200
+    assert client.get("/static/style.css").status_code == 200
+
+
+def test_page_never_renders_answers_as_html():
+    # Answer text comes from PDFs and an LLM; the page must insert it as text only.
+    code = [
+        ln
+        for ln in client.get("/static/app.js").text.splitlines()
+        if not ln.strip().startswith("//")
+    ]
+    uses = [ln for ln in code if "innerHTML" in ln]
+    assert len(uses) == 1 and "innerHTML = svg" in uses[0]  # only our own constant icons

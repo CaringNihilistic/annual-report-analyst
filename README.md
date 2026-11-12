@@ -64,7 +64,7 @@ One PostgreSQL database holds both the vector index (pgvector) and the structure
 | API | FastAPI | Typed endpoints, request validation, OpenAPI docs at `/docs` |
 | UI | Plain HTML, CSS and JavaScript, served by FastAPI | Chat-style interface with clickable citations; no build step, no extra server |
 | Evals | pytest + RAGAS-style faithfulness judge + numeric exact-match | Numbers are right or wrong, so they can be scored precisely |
-| Observability | Logs only (Langfuse planned, not done) | |
+| Observability | Langfuse (optional) | One trace per question: route, retrieved pages with scores, each LLM call with tokens. Off without keys |
 | Infra | Docker, GitHub Actions, ghcr.io, AWS EC2 with Postgres in a container | Reproducible builds, CI, a real deployment that can be stopped to near-zero cost |
 
 ---
@@ -91,7 +91,8 @@ One PostgreSQL database holds both the vector index (pgvector) and the structure
 │   ├── golden.jsonl    # question, expected answer, source page, type
 │   ├── run_evals.py    # full suite → evals/reports/
 │   ├── judge.py        # faithfulness judge
-│   └── gate.py         # 15-question regression gate
+│   ├── gate.py         # regression gate (15 questions locally, 13 in CI)
+│   └── fixtures/       # CI gate data: metric rows + numbers on cited pages
 ├── deploy/             # AWS scripts and aws.md (resources, cost, security)
 ├── tests/              # unit tests (no network, no API keys)
 ├── data/
@@ -189,7 +190,7 @@ python -c "import torch; print(torch.cuda.is_available())"   # should print True
 | `DATABASE_URL` | yes | Postgres connection string |
 | `GROQ_API_KEY` | yes | Default LLM |
 | `ANTHROPIC_API_KEY` | no | Fallback LLM |
-| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | no | Reserved for tracing (not wired up yet) |
+| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | no | Tracing for the web app and `app.ask` (evals never trace). Empty = off |
 
 ---
 
@@ -215,9 +216,12 @@ Also measured: retrieval hit rate (is the right page in the top 5?), citation ac
 python -m evals.run_evals --agent                # full suite → evals/reports/agent.md
 python -m evals.judge_validation build|score     # judge vs human grades
 python -m evals.gate                             # 15-question subset, exits non-zero on a regression
+python -m evals.gate --build-fixture             # refresh the CI gate data after re-ingesting
 ```
 
 The gate runs 15 questions that pass today (7 numbers, 3 year-over-year, 3 comparisons, 2 refusals) and fails if any answer is wrong or a cited number is not on its cited page. Last run: 15/15 (cached responses).
+
+CI runs 13 of them (`python -m evals.gate --ci`) on every pull request: all except n14 (EPS, not in the table) and r05 (refused by the LLM). It loads `financial_metrics` into a throwaway Postgres from `evals/fixtures/ci_gate.json`, and checks citations against the numbers printed on each cited page, stored as bare number lists (no report text in git). The LLM and text search are stubbed to raise, so a router change that sends one of these questions down the LLM path also fails the gate.
 
 Note: Groq's free tier allows 200,000 tokens a day for `gpt-oss-20b`. A full uncached run of all modes exceeds that. The LLM client waits and retries short rate limits, and responses are cached. If `ANTHROPIC_API_KEY` is set and Groq asks for a wait of more than a minute, the generator falls back to `claude-haiku-5-5`, the cheapest current Claude model. Each report states how many answers each model produced. The judge never falls back.
 
@@ -280,10 +284,10 @@ What the M2 baseline showed:
 
 GitHub Actions:
 
-1. **CI** (`ci.yml`, every push to `master` and every pull request): `ruff check`, `ruff format --check`, `pytest` (151 unit tests, no network, no keys).
+1. **CI** (`ci.yml`, every push to `master` and every pull request): `ruff check`, `ruff format --check`, `pytest` (159 unit tests, no network, no keys), then the eval gate on 13 questions against a Postgres service container (no keys).
 2. **Image** (`image.yml`, pushes to `master` that touch the app): builds the Docker image and publishes it to `ghcr.io/caringnihilistic/annual-report-analyst` (`:latest` and the commit SHA), using the built-in `GITHUB_TOKEN`.
 
-**The eval gate runs locally, not in CI.** It needs the populated database (built from the PDFs, which are not in git), the models and an LLM key. Run `python -m evals.gate` before merging a change to retrieval, the router or prompts. Moving it into CI would mean a database snapshot plus a Groq key as a repository secret.
+**The full gate (15 questions, with text search and the LLM) still runs locally:** it needs the populated database built from the PDFs, the models and an LLM key. Run `python -m evals.gate` before merging a change to retrieval, the router or prompts.
 
 **Deploys are manual.** The AWS server is stopped most of the time, so there is nothing to deploy to automatically. Pull the new image on the server when demoing ([deploy/aws.md](deploy/aws.md)).
 

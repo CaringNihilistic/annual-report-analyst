@@ -9,7 +9,7 @@ Most "chat with PDF" demos break on real annual reports: 300-page documents full
 
 [![CI](https://github.com/CaringNihilistic/annual-report-analyst/actions/workflows/ci.yml/badge.svg)](https://github.com/CaringNihilistic/annual-report-analyst/actions/workflows/ci.yml)
 
-**Status:** M1–M6 done: working agent, 50-question eval, Docker image, CI, and an AWS deployment (started on demand, see [deploy/aws.md](deploy/aws.md)). Write-up (M7) next. See [Roadmap](#roadmap).
+**Status:** v1 complete (M1–M7): agent, 50-question eval, Docker image, CI with an eval gate, AWS deployment started on demand ([deploy/aws.md](deploy/aws.md)). Design write-up: [docs/design.md](docs/design.md).
 
 ---
 
@@ -19,6 +19,23 @@ Most "chat with PDF" demos break on real annual reports: 300-page documents full
 - **Gets numbers right** by extracting financial tables into a database and querying them, instead of hoping the model reads a number correctly from a text chunk.
 - **Compares companies and years** by breaking a question into sub-questions and combining the results.
 - **Says "not in the reports"** when the answer isn't there, instead of guessing.
+
+## Results at a glance
+
+Blind run of the agent on the 50-question golden set (first run, no changes after seeing the questions). Details and the M2→M5 progression in [Results](#results).
+
+| | Result |
+|---|---|
+| Numbers (within 0.5%) | **12/15** (vector-only baseline on the seed set: 2/8) |
+| Year-over-year changes | 4/10 |
+| Comparisons and rankings | **8/10** (plain RAG: 0/10) |
+| Citation accuracy (cited number is on the cited page) | **28/32** (88%) |
+| Faithfulness of "why" answers (LLM judge) | 91% |
+| Refuses when the answer isn't in the reports | **5/5** |
+| Latency p50 / p95 | 0.01 s / 16.2 s (laptop); 30–40 s for text answers on the demo server |
+| Cost per question | ~$0.00006 (table answers make no LLM call) |
+
+Biggest lever: answering numbers from an extracted table instead of letting the LLM read them. Main weakness: figures outside that table (EPS, profit before tax) depend on text retrieval, which misses some. See [docs/design.md](docs/design.md) for trade-offs, costs, failure modes and scaling.
 
 ## Scope (v1)
 
@@ -98,7 +115,7 @@ One PostgreSQL database holds both the vector index (pgvector) and the structure
 ├── data/
 │   ├── raw/            # downloaded PDFs (git-ignored)
 │   └── processed/      # parsed output (git-ignored)
-├── docs/               # spot-check and judge validation
+├── docs/               # design.md, M1 spot-check, judge validation
 ├── Dockerfile          # app image, CPU torch, models baked in
 ├── docker-compose.yml  # postgres (+ the app with --profile app)
 ├── .env.example
@@ -320,7 +337,8 @@ With `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` set (free account at cloud.
   - Done 2026-11-11: FastAPI app with a chat-style HTML/CSS/JS UI; Docker image (CPU torch, models baked in, non-root) published to ghcr.io by GitHub Actions; CI with ruff and 151 tests; `evals.gate` (15/15); EC2 deployment with a $1 budget alert, Parameter Store secrets, Session Manager instead of SSH.
   - Follow-ups (2026-11-12): the eval gate now runs in CI on 13 questions from a committed fixture (13/13; the full 15 still run locally), and optional **Langfuse tracing** was added (one trace per question; off without keys).
   - **Not done, by choice:** the **demo link** is live only while the AWS server is started, to stay within the free credits. An always-on mirror on Hugging Face Spaces was built and tested locally (app + Postgres in one container), but Hugging Face now requires a paid PRO plan for Docker Spaces, so it was not published.
-- [ ] **M7: Write-up.** `docs/design.md` (trade-offs, cost, failure modes, how it would scale) and a results table in this README.
+- [x] **M7: Write-up.** `docs/design.md` (trade-offs, cost, failure modes, how it would scale) and a results table in this README.
+  - Done 2026-11-12: [docs/design.md](docs/design.md) (architecture, decisions and trade-offs, cost, failure modes, scaling, next steps) and [Results at a glance](#results-at-a-glance). No new measurements: every number comes from the recorded eval reports and `deploy/aws.md`.
 
 ---
 

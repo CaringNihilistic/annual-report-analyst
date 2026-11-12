@@ -15,6 +15,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from app import tracing
 from app.config import get_settings
 
 
@@ -137,6 +138,18 @@ class LLM:
         return result
 
     def complete(self, system: str, user: str, max_tokens: int = 1500) -> Completion:
+        prompt = {"system": system, "user": user}
+        with tracing.observe("llm", as_type="generation", input=prompt) as g:
+            c = self._complete(system, user, max_tokens)
+            g.update(
+                model=c.model,
+                output=c.text,
+                usage_details={"input_tokens": c.input_tokens, "output_tokens": c.output_tokens},
+                metadata={"cached": c.cached, "latency_s": c.latency_s},
+            )
+            return c
+
+    def _complete(self, system: str, user: str, max_tokens: int) -> Completion:
         path = self._cache_path(system, user)
         paths = [path]
         if self.fallback_model:

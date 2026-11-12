@@ -121,3 +121,26 @@ def test_gate_fails_on_wrong_answers_and_bad_citations():
     out = failures(rows)
     assert [f.split(":")[0] for f in out] == ["n02", "c05"]
     assert failures(rows[:2]) == []
+
+
+def test_page_numbers_keep_both_digit_groupings():
+    from evals.gate import page_numbers
+    from evals.metrics import contains_number
+
+    nums = page_numbers("Revenue ₹2,55,324 crore; margin 24.3% (FY2025)")
+    assert {"255324", "2", "55", "324", "24.3", "2025"} <= set(nums)
+    # The stored numbers alone still pass the citation check used by the scorer.
+    assert contains_number(" ".join(nums), 255324) and contains_number(" ".join(nums), 24.3)
+
+
+def test_gate_forbidden_stub_raises_on_any_use():
+    import pytest
+
+    from evals.gate import CI_IDS, GATE_IDS, _Forbidden
+
+    llm = _Forbidden("the LLM")
+    with pytest.raises(RuntimeError, match="the LLM was used"):
+        llm.complete("hi")
+    with pytest.raises(RuntimeError):
+        llm("query")
+    assert set(CI_IDS) < set(GATE_IDS) and "n14" not in CI_IDS

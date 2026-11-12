@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app import tracing
 from app.agent.graph import build_agent
 from app.config import get_settings
 from app.db.models import get_engine
@@ -30,6 +31,7 @@ from app.rag import COMPANY_NAMES, Answer
 STATIC = Path(__file__).parent / "static"
 DISCLAIMER = "Answers come only from the companies' annual reports. Not investment advice."
 log = logging.getLogger(__name__)
+tracing.enable()  # sends traces only if LANGFUSE_* keys are set
 
 app = FastAPI(
     title="Annual Report Analyst (India)",
@@ -89,7 +91,8 @@ def get_answerer() -> Callable[[str], Answer]:
     def run(question: str) -> Answer:
         with Session(_engine()) as session:
             retrieve = HybridRetriever(session, embed, reranker=reranker)
-            return build_agent(session, retrieve, LLM(), get_settings().retrieval_k)(question)
+            agent = build_agent(session, retrieve, LLM(), get_settings().retrieval_k)
+            return tracing.traced_answer(agent, question)
 
     return run
 

@@ -64,7 +64,7 @@ One PostgreSQL database holds both the vector index (pgvector) and the structure
 | API | FastAPI | Typed endpoints, request validation, OpenAPI docs at `/docs` |
 | UI | Plain HTML, CSS and JavaScript, served by FastAPI | Chat-style interface with clickable citations; no build step, no extra server |
 | Evals | pytest + RAGAS-style faithfulness judge + numeric exact-match | Numbers are right or wrong, so they can be scored precisely |
-| Observability | Logs only (Langfuse planned, not done) | |
+| Observability | Langfuse (optional) | One trace per question: route, retrieved pages with scores, each LLM call with tokens. Off without keys |
 | Infra | Docker, GitHub Actions, ghcr.io, AWS EC2 with Postgres in a container | Reproducible builds, CI, a real deployment that can be stopped to near-zero cost |
 
 ---
@@ -91,7 +91,8 @@ One PostgreSQL database holds both the vector index (pgvector) and the structure
 │   ├── golden.jsonl    # question, expected answer, source page, type
 │   ├── run_evals.py    # full suite → evals/reports/
 │   ├── judge.py        # faithfulness judge
-│   └── gate.py         # 15-question regression gate
+│   ├── gate.py         # regression gate (15 questions locally, 13 in CI)
+│   └── fixtures/       # CI gate data: metric rows + numbers on cited pages
 ├── deploy/             # AWS scripts and aws.md (resources, cost, security)
 ├── tests/              # unit tests (no network, no API keys)
 ├── data/
@@ -189,7 +190,7 @@ python -c "import torch; print(torch.cuda.is_available())"   # should print True
 | `DATABASE_URL` | yes | Postgres connection string |
 | `GROQ_API_KEY` | yes | Default LLM |
 | `ANTHROPIC_API_KEY` | no | Fallback LLM |
-| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | no | Reserved for tracing (not wired up yet) |
+| `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL` | no | Tracing for the web app and `app.ask` (evals never trace). Empty = off |
 
 ---
 
@@ -215,9 +216,12 @@ Also measured: retrieval hit rate (is the right page in the top 5?), citation ac
 python -m evals.run_evals --agent                # full suite → evals/reports/agent.md
 python -m evals.judge_validation build|score     # judge vs human grades
 python -m evals.gate                             # 15-question subset, exits non-zero on a regression
+python -m evals.gate --build-fixture             # refresh the CI gate data after re-ingesting
 ```
 
 The gate runs 15 questions that pass today (7 numbers, 3 year-over-year, 3 comparisons, 2 refusals) and fails if any answer is wrong or a cited number is not on its cited page. Last run: 15/15 (cached responses).
+
+CI runs 13 of them (`python -m evals.gate --ci`) on every pull request: all except n14 (EPS, not in the table) and r05 (refused by the LLM). It loads `financial_metrics` into a throwaway Postgres from `evals/fixtures/ci_gate.json`, and checks citations against the numbers printed on each cited page, stored as bare number lists (no report text in git). The LLM and text search are stubbed to raise, so a router change that sends one of these questions down the LLM path also fails the gate.
 
 Note: Groq's free tier allows 200,000 tokens a day for `gpt-oss-20b`. A full uncached run of all modes exceeds that. The LLM client waits and retries short rate limits, and responses are cached. If `ANTHROPIC_API_KEY` is set and Groq asks for a wait of more than a minute, the generator falls back to `claude-haiku-5-5`, the cheapest current Claude model. Each report states how many answers each model produced. The judge never falls back.
 
@@ -280,10 +284,10 @@ What the M2 baseline showed:
 
 GitHub Actions:
 
-1. **CI** (`ci.yml`, every push to `master` and every pull request): `ruff check`, `ruff format --check`, `pytest` (151 unit tests, no network, no keys).
+1. **CI** (`ci.yml`, every push to `master` and every pull request): `ruff check`, `ruff format --check`, `pytest` (159 unit tests, no network, no keys), then the eval gate on 13 questions against a Postgres service container (no keys).
 2. **Image** (`image.yml`, pushes to `master` that touch the app): builds the Docker image and publishes it to `ghcr.io/caringnihilistic/annual-report-analyst` (`:latest` and the commit SHA), using the built-in `GITHUB_TOKEN`.
 
-**The eval gate runs locally, not in CI.** It needs the populated database (built from the PDFs, which are not in git), the models and an LLM key. Run `python -m evals.gate` before merging a change to retrieval, the router or prompts. Moving it into CI would mean a database snapshot plus a Groq key as a repository secret.
+**The full gate (15 questions, with text search and the LLM) still runs locally:** it needs the populated database built from the PDFs, the models and an LLM key. Run `python -m evals.gate` before merging a change to retrieval, the router or prompts.
 
 **Deploys are manual.** The AWS server is stopped most of the time, so there is nothing to deploy to automatically. Pull the new image on the server when demoing ([deploy/aws.md](deploy/aws.md)).
 
@@ -292,6 +296,10 @@ GitHub Actions:
 One t3.small EC2 server in Sydney runs the app and Postgres in Docker, paid from the AWS Free plan credits and stopped when not in use (about $0.80 per running day, $1.92/month stopped). There's no SSH (admin access is Session Manager only), keys are in SSM Parameter Store, the IAM role is least-privilege, and a $1 budget alert is set. Details, costs and commands: [deploy/aws.md](deploy/aws.md).
 
 Measured on that server: figures, comparisons and refusals answer in **under 1 s**. Questions about the report text take **30–40 s**, mostly the cross-encoder reranker on 2 slow vCPUs. An 8-bit reranker was tried and rejected because it changed the retrieved passages. The demo link works only while the server is running (`deploy\aws.ps1 start` prints it).
+
+## Tracing
+
+With `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` set (free account at cloud.langfuse.com), the web app and `python -m app.ask` send one trace per question to Langfuse: the route taken, the retrieved pages with rerank scores, and each LLM call with its prompt, model, tokens and whether it came from the cache. `app/tracing.py` does nothing without keys. Evals and unit tests never trace, and a Langfuse failure is logged without affecting the answer. On the AWS server, add the two keys to `/opt/ragg/.env` and the api service's environment to turn it on.
 
 ---
 
@@ -310,7 +318,8 @@ Measured on that server: figures, comparisons and refusals answer in **under 1 s
   - Done 2026-11-11: 50 questions with expected answers read off page images (18 ask for figures outside `financial_metrics`), year-over-year and comparison scoring, a faithfulness judge (`gpt-oss-120b`), and a blind agent run: numbers 12/15, year-over-year 4/10, comparisons 8/10, citations 28/32, faithfulness 91%. After router fixes (optimistic, dev-set): numbers 13/15, year-over-year 5/10, comparisons 9/10. Judge vs grader agreement 13/15 (κ 0.42). Graded by Claude, not a human, so a human check is still open. See [Results](#results).
 - [x] **M6: Ship.** Docker, CI with eval gate, AWS deployment with billing alarm, Langfuse tracing, public demo link.
   - Done 2026-11-11: FastAPI app with a chat-style HTML/CSS/JS UI; Docker image (CPU torch, models baked in, non-root) published to ghcr.io by GitHub Actions; CI with ruff and 151 tests; `evals.gate` (15/15); EC2 deployment with a $1 budget alert, Parameter Store secrets, Session Manager instead of SSH.
-  - **Not done, by choice:** the eval gate runs locally, not in CI (it needs the database and an API key). **Langfuse tracing** was not added. The **demo link** is live only while the server is started, to stay within the free credits. An always-on free mirror (Hugging Face Spaces) was considered, but it would need Postgres inside the Space and a separate account, so it was left out.
+  - Follow-ups (2026-11-12): the eval gate now runs in CI on 13 questions from a committed fixture (13/13; the full 15 still run locally), and optional **Langfuse tracing** was added (one trace per question; off without keys).
+  - **Not done, by choice:** the **demo link** is live only while the AWS server is started, to stay within the free credits. An always-on mirror on Hugging Face Spaces was built and tested locally (app + Postgres in one container), but Hugging Face now requires a paid PRO plan for Docker Spaces, so it was not published.
 - [ ] **M7: Write-up.** `docs/design.md` (trade-offs, cost, failure modes, how it would scale) and a results table in this README.
 
 ---

@@ -1,7 +1,8 @@
-# Lint and unit tests on every push to master and every pull request.
+# Lint, unit tests and the eval gate on every push to master and every pull request.
 # Unit tests need no network, database or API keys (LLM and embeddings are mocked).
-# The eval gate (python -m evals.gate) needs the database and parsed reports, so it is
-# run locally before merging; see README "Evaluation".
+# The gate runs 13 golden questions against a throwaway Postgres loaded from
+# evals/fixtures/ci_gate.json; no API keys or PDFs needed. The full 15-question gate
+# (python -m evals.gate) still runs locally; see README "Evaluation".
 name: CI
 
 on:
@@ -20,6 +21,17 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    services:
+      db:  # empty, thrown away after the job
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: rag
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: annual_reports
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rag -d annual_reports"
+          --health-interval 5s --health-retries 20
     steps:
       - uses: actions/checkout@v5
 
@@ -41,3 +53,9 @@ jobs:
 
       - name: Unit tests
         run: pytest -q
+
+      - name: Eval gate (13 questions, fixture data)
+        env:
+          DATABASE_URL: postgresql+psycopg://rag:ci-only@127.0.0.1:5432/annual_reports
+          HF_HUB_OFFLINE: "1"
+        run: python -m evals.gate --ci

@@ -297,6 +297,10 @@ One t3.small EC2 server in Sydney runs the app and Postgres in Docker, paid from
 
 Measured on that server: figures, comparisons and refusals answer in **under 1 s**. Questions about the report text take **30–40 s**, mostly the cross-encoder reranker on 2 slow vCPUs. An 8-bit reranker was tried and rejected because it changed the retrieved passages. The demo link works only while the server is running (`deploy\aws.ps1 start` prints it).
 
+## Tracing
+
+With `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` set (free account at cloud.langfuse.com), the web app and `python -m app.ask` send one trace per question to Langfuse: the route taken, the retrieved pages with rerank scores, and each LLM call with its prompt, model, tokens and whether it came from the cache. `app/tracing.py` does nothing without keys. Evals and unit tests never trace, and a Langfuse failure is logged without affecting the answer. On the AWS server, add the two keys to `/opt/ragg/.env` and the api service's environment to turn it on.
+
 ---
 
 ## Roadmap
@@ -314,7 +318,8 @@ Measured on that server: figures, comparisons and refusals answer in **under 1 s
   - Done 2026-11-11: 50 questions with expected answers read off page images (18 ask for figures outside `financial_metrics`), year-over-year and comparison scoring, a faithfulness judge (`gpt-oss-120b`), and a blind agent run: numbers 12/15, year-over-year 4/10, comparisons 8/10, citations 28/32, faithfulness 91%. After router fixes (optimistic, dev-set): numbers 13/15, year-over-year 5/10, comparisons 9/10. Judge vs grader agreement 13/15 (κ 0.42). Graded by Claude, not a human, so a human check is still open. See [Results](#results).
 - [x] **M6: Ship.** Docker, CI with eval gate, AWS deployment with billing alarm, Langfuse tracing, public demo link.
   - Done 2026-11-11: FastAPI app with a chat-style HTML/CSS/JS UI; Docker image (CPU torch, models baked in, non-root) published to ghcr.io by GitHub Actions; CI with ruff and 151 tests; `evals.gate` (15/15); EC2 deployment with a $1 budget alert, Parameter Store secrets, Session Manager instead of SSH.
-  - **Not done, by choice:** the eval gate runs locally, not in CI (it needs the database and an API key). **Langfuse tracing** was not added. The **demo link** is live only while the server is started, to stay within the free credits. An always-on free mirror (Hugging Face Spaces) was considered, but it would need Postgres inside the Space and a separate account, so it was left out.
+  - Follow-ups (2026-11-12): the eval gate now runs in CI on 13 questions from a committed fixture (13/13; the full 15 still run locally), and optional **Langfuse tracing** was added (one trace per question; off without keys).
+  - **Not done, by choice:** the **demo link** is live only while the AWS server is started, to stay within the free credits. An always-on mirror on Hugging Face Spaces was built and tested locally (app + Postgres in one container), but Hugging Face now requires a paid PRO plan for Docker Spaces, so it was not published.
 - [ ] **M7: Write-up.** `docs/design.md` (trade-offs, cost, failure modes, how it would scale) and a results table in this README.
 
 ---

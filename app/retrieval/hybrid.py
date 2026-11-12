@@ -14,6 +14,7 @@ from collections.abc import Callable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import tracing
 from app.config import get_settings
 from app.db.models import Chunk
 from app.retrieval.vector import Hit, parse_filters, search
@@ -102,6 +103,19 @@ class HybridRetriever:
 
     def __call__(self, question: str, k: int = 5, companies=None, years=None) -> list[Hit]:
         """Filters default to the companies/years named in the question; pass them to override."""
+        with tracing.observe("retrieve", as_type="retriever", input=question) as span:
+            hits = self._retrieve(question, k, companies, years)
+            span.update(
+                output=[
+                    {"company": h.company, "year": h.fiscal_year, "page": h.page,
+                     "score": round(-h.distance, 3), "text": h.text[:200]}
+                    for h in hits
+                ],
+                metadata={"k": k, "reranked": self.reranker is not None},
+            )  # fmt: skip
+            return hits
+
+    def _retrieve(self, question: str, k: int, companies, years) -> list[Hit]:
         parsed = parse_filters(question)
         companies = parsed[0] if companies is None else companies
         years = parsed[1] if years is None else years

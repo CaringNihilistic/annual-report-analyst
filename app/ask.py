@@ -11,6 +11,7 @@ import sys
 
 from sqlalchemy.orm import Session
 
+from app import tracing
 from app.agent.graph import build_agent
 from app.agent.router import plan
 from app.config import get_settings
@@ -30,6 +31,7 @@ def main() -> None:
     ap.add_argument("--no-agent", action="store_true", help="plain RAG, no router or tools")
     args = ap.parse_args()
 
+    tracing.enable()  # sends traces only if LANGFUSE_* keys are set
     s = get_settings()
     embed = load_embedder(s.embedding_model)
     with Session(get_engine()) as session:
@@ -38,7 +40,8 @@ def main() -> None:
             a = answer(args.question, retrieve=retrieve, llm=LLM(), k=s.retrieval_k)
         else:
             print(f"route: {plan(args.question).route}")
-            a = build_agent(session, retrieve, LLM(), s.retrieval_k)(args.question)
+            agent = build_agent(session, retrieve, LLM(), s.retrieval_k)
+            a = tracing.traced_answer(agent, args.question)
 
     print(f"\n{a.text}\n")
     for c in a.citations:
